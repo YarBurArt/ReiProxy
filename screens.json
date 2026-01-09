@@ -1,0 +1,17 @@
+{
+  "auth": {
+    "module": "libs.uix.baseclass.auth_screen",
+    "object": "AuthScreen",
+    "kv": "libs/uix/kv/auth_screen.kv"
+  },
+  "home": {
+    "module": "libs.uix.baseclass.home_screen",
+    "object": "HomeScreen",
+    "kv": "libs/uix/kv/home_screen.kv"
+  },
+  "settings": {
+    "module": "libs.uix.baseclass.settings_screen",
+    "object": "SettingsScreen",
+    "kv": "libs/uix/kv/settings_screen.kv"
+  }
+}

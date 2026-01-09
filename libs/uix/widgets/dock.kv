@@ -1,0 +1,31 @@
+<BottomDock>:
+    size_hint_y: None
+    height: dp(72)
+    padding: dp(8)
+    spacing: dp(12)
+    canvas.before:
+        Color:
+            rgba: (0.06,0.06,0.06,1)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    MDIconButton:
+        icon: "home"
+        user_font_size: "28sp"
+        on_release: app.root.push("home", side="left")
+
+    MDIconButton:
+        icon: "repeat"
+        user_font_size: "28sp"
+        on_release: app.root.push("repeater", side="left")
+
+    MDIconButton:
+        icon: "history"
+        user_font_size: "28sp"
+        on_release: app.root.push("history", side="left")
+
+    MDIconButton:
+        icon: "shield"
+        user_font_size: "28sp"
+        on_release: app.root.push("tools", side="left")

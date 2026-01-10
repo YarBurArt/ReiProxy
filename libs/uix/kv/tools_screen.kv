@@ -1,0 +1,30 @@
+<ToolsScreen>:
+    canvas.before:
+        Color:
+            rgba: (0.05, 0.05, 0.05, 1)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    BoxLayout:
+        orientation: 'vertical'
+        padding: [dp(16), dp(16), dp(16), dp(80)] 
+        spacing: dp(20)
+
+        MDLabel:
+            text: "Tools & Web"
+            font_style: "Display"
+            role: "small"
+            adaptive_height: True
+            theme_text_color: "Custom"
+            text_color: (1, 1, 1, 1)
+
+        BoxLayout:
+            id: webview_container
+            canvas.before:
+                Color:
+                    rgba: (0.12, 0.12, 0.12, 1) 
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(15)]

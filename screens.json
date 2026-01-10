@@ -13,5 +13,10 @@
     "module": "libs.uix.baseclass.settings_screen",
     "object": "SettingsScreen",
     "kv": "libs/uix/kv/settings_screen.kv"
+  },
+  "tools": {
+    "module": "libs.uix.baseclass.tools_screen",
+    "object": "ToolsScreen",
+    "kv": "libs/uix/kv/tools_screen.kv"
   }
 }

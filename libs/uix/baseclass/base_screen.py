@@ -1,4 +1,5 @@
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.screenmanager import Screen
 from kivy.lang import Builder
 from libs.uix.widgets.dock import BottomDock
@@ -13,14 +14,18 @@ class BaseScreen(Screen):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        root = BoxLayout(orientation="vertical")
+        anchor = AnchorLayout(anchor_x='center', anchor_y='center')
+        root = BoxLayout(
+            orientation="vertical",
+        )
 
         self.content = BoxLayout(orientation="vertical")
         root.add_widget(self.content)
 
         dock = BottomDock(app=self.get_app())
         root.add_widget(dock)
-        self.add_widget(root)
+        anchor.add_widget(root)
+        self.add_widget(anchor)
 
     def get_app(self):
         from kivy.app import App

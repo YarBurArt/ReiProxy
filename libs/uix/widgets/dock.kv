@@ -1,19 +1,21 @@
 <BottomDock>:
     size_hint_y: None
-    height: dp(72)
+    height: dp(55)
     padding: dp(8)
     spacing: dp(12)
     canvas.before:
         Color:
-            rgba: (0.06,0.06,0.06,1)
-        Rectangle:
+            rgba: (0.1, 0.1, 0.1, 0.95)
+        RoundedRectangle:
             pos: self.pos
             size: self.size
+            radius: [(dp(20), dp(20)), (dp(20), dp(20)), (0, 0), (0, 0)]
+    Widget:
 
     MDIconButton:
         icon: "home"
         user_font_size: "28sp"
-        on_release: app.root.push("home", side="left")
+        on_release: app.root.push("home")
 
     MDIconButton:
         icon: "repeat"
@@ -29,3 +31,5 @@
         icon: "shield"
         user_font_size: "28sp"
         on_release: app.root.push("tools", side="left")
+
+    Widget:

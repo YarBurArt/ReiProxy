@@ -1,11 +1,30 @@
+#:include libs/uix/widgets/rsec.kv
+
 <AuthScreen>
-
     BoxLayout:
-        orientation: "vertical"
-
+        padding: [0, 0, 0, dp(65)]
+        orientation: 'vertical'
         MDLabel:
-            text: "Current Screen: " + root.name
-
-        MDButton:
-            text: "Login (Dummy)"
-            on_release: root.manager.push_replacement("home")
+            text: "Select project"
+            font_style: "Display"
+            role: "small"
+            adaptive_height: True
+            padding: dp(10)
+        
+        ScrollView:
+            MDList:
+                id: project_list
+                # Iterating through projects defined in Python
+                # For simplicity, just adding manually here to show structure
+                MDListItem:
+                    on_release: root.manager.current = 'home'
+                    MDListItemHeadlineText:
+                        text: "API Gateway"
+                    MDListItemSupportingText:
+                        text: "Production cluster endpoints"
+                MDListItem:
+                    on_release: root.manager.current = 'home'
+                    MDListItemHeadlineText:
+                        text: "Auth Microservice"
+                    MDListItemSupportingText:
+                        text: "JWT and OAuth2 testing"

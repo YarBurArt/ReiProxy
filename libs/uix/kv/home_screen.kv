@@ -1,11 +1,69 @@
+#:include libs/uix/widgets/rsec.kv
+
 <HomeScreen>
-
     BoxLayout:
-        orientation: "vertical"
+        orientation: 'vertical'
+        padding: [0, 0, 0, dp(65)]
+        # Header Controls
+        MDBoxLayout:
+            size_hint_y: None
+            height: dp(50)
+            padding: dp(5)
+            spacing: dp(5)
+            MDIconButton:
+                icon: "chevron-left"
+                on_release: root.manager.current = 'auth' # tmp
+            MDIconButton:
+                icon: "chevron-right"
+            MDButton:
+                on_release: root.send_request()
+                style: "filled"
+                MDButtonText:
+                    text: "SEND"
+            Widget:
+            MDButton: 
+                style: "tonal"
+                MDButtonText:
+                    text: "RAW"
+            MDButton: 
+                style: "tonal"
+                MDButtonText:
+                    text: "FORMATTED"
 
-        MDLabel:
-            text: "Current Screen: " + root.name
+        # Main Workspace - Split Vertically
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: dp(8)
+            spacing: dp(8)
 
-        MDButton:
-            text: "GOTO SETTINGS"
-            on_release: root.manager.push("settings")
+            # Left Section: Request (Modifiable)
+            RoundedSection:
+                MDLabel:
+                    text: "REQUEST"
+                    #font_style: "Caption"
+                    size_hint_y: None
+                    height: dp(20)
+                TextInput:
+                    text: "some request_body" #root.request_body
+                    background_color: 0,0,0,0
+                    foreground_color: 1,1,1,1
+                    font_name: "Roboto" 
+                    multiline: True
+
+            # Right Section: Response (Read Only)
+            RoundedSection:
+                bg_color: [0.12, 0.12, 0.12, 1]
+                MDLabel:
+                    text: "RESPONSE"
+                    #font_style: "Caption"
+                    size_hint_y: None
+                    height: dp(20)
+                ScrollView:
+                    TextInput:
+                        text: "some response" #root.response_body
+                        readonly: True
+                        background_color: 0,0,0,0
+                        foreground_color: 0.2, 0.8, 0.2, 1
+                        multiline: True
+                        size_hint_y: None
+                        height: self.minimum_height

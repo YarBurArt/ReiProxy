@@ -3,7 +3,7 @@ import json
 
 from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager
+from kivy.uix.screenmanager import ScreenManager, NoTransition
 
 from libs.applibs import utils
 
@@ -60,7 +60,7 @@ class Root(ScreenManager):
         self.load_screen(screen_name)
 
         # set transition direction
-        self.transition.direction = side
+        self.transition = NoTransition()
 
         # set current screen
         self.current = screen_name

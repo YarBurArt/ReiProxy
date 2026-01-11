@@ -1,0 +1,11 @@
+<RoundedSection@BoxLayout>:
+    orientation: 'vertical'
+    padding: dp(10)
+    bg_color: [0.15, 0.15, 0.15, 1]
+    canvas.before:
+        Color:
+            rgba: self.bg_color
+        RoundedRectangle:
+            size: self.size
+            pos: self.pos
+            radius: [dp(12)]

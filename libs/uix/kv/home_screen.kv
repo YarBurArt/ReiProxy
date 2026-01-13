@@ -1,4 +1,5 @@
 #:include libs/uix/widgets/rsec.kv
+#:import HttpLexer pygments.lexers.HttpLexer
 
 <HomeScreen>
     BoxLayout:
@@ -43,12 +44,14 @@
                     #font_style: "Caption"
                     size_hint_y: None
                     height: dp(20)
-                TextInput:
-                    text: "some request_body" #root.request_body
+                CodeInput:
+                    text: ""
+                    style_name: 'monokai' 
                     background_color: 0,0,0,0
                     foreground_color: 1,1,1,1
                     font_name: "Roboto" 
-                    multiline: True
+                    lexer: HttpLexer()
+                    id: req_input
 
             # Right Section: Response (Read Only)
             RoundedSection:
@@ -59,11 +62,13 @@
                     size_hint_y: None
                     height: dp(20)
                 ScrollView:
-                    TextInput:
-                        text: "some response" #root.response_body
+                    CodeInput:
+                        id: req_output
+                        text: ""
                         readonly: True
+                        lexer: HttpLexer()
+                        style_name: 'monokai' 
                         background_color: 0,0,0,0
-                        foreground_color: 0.2, 0.8, 0.2, 1
-                        multiline: True
+                        foreground_color: 1,1,1,1
                         size_hint_y: None
                         height: self.minimum_height

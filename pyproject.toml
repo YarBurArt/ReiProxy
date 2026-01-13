@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "httpx>=0.28.1",
     "kivymd",
+    "pygments>=2.19.2",
 ]
 
 [tool.uv.sources]

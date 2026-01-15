@@ -2,7 +2,6 @@
 import sys
 from libs.uix.baseclass.base_screen import BaseScreen
 from kivymd.uix.label import MDLabel
-from kivymd.uix.button import MDButton
 from kivy.metrics import dp
 
 
@@ -37,7 +36,7 @@ class ToolsScreen(BaseScreen):
             self.webview.getSettings().setJavaScriptEnabled(True)
             self.webview.setWebViewClient(WebViewClient())
 
-            bottom_margin = int(dp(55))
+            bottom_margin = int(dp(55))  # fix for bottom dock
             layout = LinearLayout(Activity)
             layout.setOrientation(1)  # Vertical
 

@@ -1,7 +1,6 @@
 # from kivy.uix.screenmanager import Screen
 import threading
 import httpx
-from kivy.properties import StringProperty
 from kivy.clock import Clock
 from libs.uix.baseclass.base_screen import BaseScreen
 from libs.applibs import request_read
@@ -11,8 +10,6 @@ class HomeScreen(BaseScreen):
     # changing screens also can be done in python
     # def goto_settings_screen(self):
     #     self.manager.push("settings")
-    #request_body = StringProperty("POST https://httpbin.org/post HTTP/1.1\nContent-Type: application/json\n\n{\"key\": \"value\"}")
-    #response_body = StringProperty("")
 
     def send_request(self):
         self.ids.req_output.text = "Processing..."
@@ -25,9 +22,10 @@ class HomeScreen(BaseScreen):
                 return
 
             req = request_read.HTTPRequest(raw_text)
-            
+
             if req.error_code:
-                error_msg = f"HTTP Parse Error {req.error_code}: {req.error_message}"
+                error_msg = "HTTP Parse Error " + \
+                            f"{req.error_code}: {req.error_message}"
                 Clock.schedule_once(lambda dt: self._update_ui(error_msg))
                 return
 
@@ -42,11 +40,15 @@ class HomeScreen(BaseScreen):
                 protocol = "http" if ":80" in host else "https"
                 final_url = f"{protocol}://{host.strip()}{path}"
             else:
-                raise ValueError("Relative path used but no 'Host' header found.")
+                raise ValueError(
+                    "Relative path used but no 'Host' header found."
+                )
 
             body = req.rfile.read()
             # convert req.headers (HTTPMessage) to a standard dict for httpx
-            with httpx.Client(verify=False, follow_redirects=True, timeout=5.0) as client:
+            with httpx.Client(
+                verify=False, follow_redirects=True, timeout=5.0
+            ) as client:
                 response = client.request(
                     method=method,
                     url=final_url,
@@ -55,7 +57,9 @@ class HomeScreen(BaseScreen):
                 )
 
                 # 'HTTP/1.1' or 'HTTP/2'
-                res_text = f"{response.http_version} {response.status_code} {response.reason_phrase}\n"
+                res_text = f"{response.http_version}" + \
+                           f" {response.status_code}" + \
+                           f" {response.reason_phrase}\n"
                 for k, v in response.headers.items():
                     res_text += f"{k}: {v}\n"
                 res_text += f"\n{response.text}"

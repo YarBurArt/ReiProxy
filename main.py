@@ -19,6 +19,7 @@ class MainApp(MDApp):
         self.root = Root()
         self.root.push("auth")
         self.theme_cls.theme_style = "Dark"
-        
+
+
 if __name__ == "__main__":
     MainApp().run()

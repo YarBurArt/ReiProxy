@@ -1,0 +1,253 @@
+#:include libs/uix/widgets/rsec.kv
+#:import HttpLexer pygments.lexers.HttpLexer
+
+<HistoryScreen>
+    BoxLayout:
+        padding: [0, 0, 0, dp(60)]
+        orientation: 'vertical'
+        MDBoxLayout:
+            orientation: 'horizontal'
+            adaptive_height: True
+            padding: dp(5)
+            spacing: dp(8)
+            MDLabel:
+                text: "HTTP history"
+                font_style: "Title"
+                role: "medium"
+                adaptive_height: True
+            MDExtendedFabButton:
+                fab_state: "expand"
+                on_release: app.root.push("repeater", side="left") # TODO func with req id
+                height: "35dp"
+                MDExtendedFabButtonText:
+                    text: "Repeat"
+            MDExtendedFabButton:
+                fab_state: "expand"
+                on_release: app.root.push("repeater", side="left") # TODO req id
+                height: "35dp"
+                MDExtendedFabButtonText:
+                    text: "Automate"
+        
+        MDBoxLayout:
+            orientation: "horizontal"
+            adaptive_height: True
+            padding: [dp(10), dp(5)]
+            spacing: dp(5)
+            
+            MDLabel:
+                text: "#"
+                size_hint_x: None
+                width: dp(40)
+                bold: True
+            MDLabel:
+                text: "Method"
+                size_hint_x: None
+                width: dp(70)
+                bold: True
+            MDLabel:
+                text: "Host"
+                size_hint_x: None
+                width: dp(150)
+                bold: True
+            MDLabel:
+                text: "URL"
+                size_hint_x: 1
+                bold: True
+            MDLabel:
+                text: "Status"
+                size_hint_x: None
+                width: dp(60)
+                bold: True
+            MDLabel:
+                text: "Time"
+                size_hint_x: None
+                width: dp(70)
+                bold: True
+            MDLabel:
+                text: "MIME"
+                size_hint_x: None
+                width: dp(100)
+                bold: True
+
+        ScrollView:
+            do_scroll_x: False
+            MDList:
+                id: project_list
+                spacing: 0
+                # just as example, #FIXME: logic to history_screen.py 
+                RelativeLayout:
+                    size_hint_y: None
+                    height: dp(35)
+
+                    MDBoxLayout:
+                        orientation: "horizontal"
+                        padding: [dp(10), 0]
+                        spacing: dp(5)
+                        md_bg_color: [1, 1, 1, 0.02] if self.parent and False else [0, 0, 0, 0]
+
+                        MDLabel:
+                            text: "102"
+                            size_hint_x: None
+                            width: dp(40)
+                            theme_text_color: "Primary" 
+                        MDLabel:
+                            text: "GET"
+                            size_hint_x: None
+                            width: dp(70)
+                            theme_text_color: "Custom"
+                            text_color: 0.2, 0.6, 1, 1
+                            bold: True
+                        MDLabel:
+                            text: "api.example.com"
+                            size_hint_x: None
+                            width: dp(150)
+                        MDLabel:
+                            text: "/v1/auth/login?debug=true"
+                            size_hint_x: 1
+                            shorten: True
+                            shorten_from: "right"
+                        MDLabel:
+                            text: "200"
+                            size_hint_x: None
+                            width: dp(60)
+                            theme_text_color: "Custom"
+                            text_color: 0.3, 0.8, 0.3, 1
+                        MDLabel:
+                            text: "145ms"
+                            size_hint_x: None
+                            width: dp(70)
+                        MDLabel:
+                            text: "json"
+                            size_hint_x: None
+                            width: dp(100)
+
+                    Button:
+                        background_color: 0, 0, 0, 0
+                        on_release: app.root.push("home")
+
+                RelativeLayout:
+                    size_hint_y: None
+                    height: dp(35)
+                    MDBoxLayout:
+                        orientation: "horizontal"
+                        padding: [dp(10), 0]
+                        spacing: dp(5)
+                        MDLabel:
+                            text: "103"
+                            size_hint_x: None
+                            width: dp(40)
+                            theme_text_color: "Primary"
+                        MDLabel:
+                            text: "GET"
+                            size_hint_x: None
+                            width: dp(70)
+                            theme_text_color: "Custom"
+                            text_color: 0.2, 0.6, 1, 1
+                        MDLabel:
+                            text: "static.cdn.net"
+                            size_hint_x: None
+                            width: dp(150)
+                        MDLabel:
+                            text: "/assets/v2/legacy/old_logo.png"
+                            size_hint_x: 1
+                            shorten: True
+                        MDLabel:
+                            text: "404"
+                            size_hint_x: None
+                            width: dp(60)
+                            theme_text_color: "Custom"
+                            text_color: 1, 0.3, 0.3, 1
+                        MDLabel:
+                            text: "12ms"
+                            size_hint_x: None
+                            width: dp(70)
+                        MDLabel:
+                            text: "image/png"
+                            size_hint_x: None
+                            width: dp(100)
+                    Button:
+                        background_color: 0, 0, 0, 0
+                        on_release: print("Selected 103")
+
+                RelativeLayout:
+                    size_hint_y: None
+                    height: dp(35)
+                    MDBoxLayout:
+                        orientation: "horizontal"
+                        padding: [dp(10), 0]
+                        spacing: dp(5)
+                        MDLabel:
+                            text: "104"
+                            size_hint_x: None
+                            width: dp(40)
+                            theme_text_color: "Primary"
+                        MDLabel:
+                            text: "POST"
+                            size_hint_x: None
+                            width: dp(70)
+                            theme_text_color: "Custom"
+                            text_color: 1, 0.6, 0.2, 1
+                        MDLabel:
+                            text: "internal.api.local"
+                            size_hint_x: None
+                            width: dp(150)
+                        MDLabel:
+                            text: "/graphql/v1/query"
+                            size_hint_x: 1
+                            shorten: True
+                        MDLabel:
+                            text: "200"
+                            size_hint_x: None
+                            width: dp(60)
+                            theme_text_color: "Custom"
+                            text_color: 0.3, 0.8, 0.3, 1
+                        MDLabel:
+                            text: "842ms"
+                            size_hint_x: None
+                            width: dp(70)
+                        MDLabel:
+                            text: "json"
+                            size_hint_x: None
+                            width: dp(100)
+                    Button:
+                        background_color: 0, 0, 0, 0
+                        on_release: print("Selected 104")
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: dp(8)
+            spacing: dp(8)
+
+            # Left Section: Request 
+            RoundedSection:
+                MDLabel:
+                    text: "REQUEST"
+                    size_hint_y: None
+                    height: dp(20)
+                CodeInput:
+                    text: ""
+                    style_name: 'monokai' 
+                    background_color: 0,0,0,0
+                    foreground_color: 1,1,1,1
+                    font_name: "Roboto" 
+                    lexer: HttpLexer()
+                    readonly: True
+                    id: req_h
+
+            # Right Section: Response
+            RoundedSection:
+                bg_color: [0.12, 0.12, 0.12, 1]
+                MDLabel:
+                    text: "RESPONSE"
+                    size_hint_y: None
+                    height: dp(20)
+                ScrollView:
+                    CodeInput:
+                        id: res_h
+                        text: ""
+                        readonly: True
+                        lexer: HttpLexer()
+                        style_name: 'monokai' 
+                        background_color: 0,0,0,0
+                        foreground_color: 1,1,1,1
+                        size_hint_y: None
+                        height: self.minimum_height

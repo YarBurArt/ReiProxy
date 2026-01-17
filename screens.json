@@ -18,5 +18,10 @@
     "module": "libs.uix.baseclass.tools_screen",
     "object": "ToolsScreen",
     "kv": "libs/uix/kv/tools_screen.kv"
+  },
+  "history": {
+    "module": "libs.uix.baseclass.history_screen",
+    "object": "HistoryScreen",
+    "kv": "libs/uix/kv/history_screen.kv"
   }
 }

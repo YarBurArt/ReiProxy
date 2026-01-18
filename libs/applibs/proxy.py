@@ -1,6 +1,7 @@
 from typing import Callable, Dict, List
 import base64
 import time
+import asyncio
 
 from collections import deque
 from threading import Lock
@@ -184,7 +185,6 @@ async def test_server():
 if __name__ == '__main__':
     try:
         # check here https://github.com/kivy/kivy/pull/5241
-        import asyncio
         asyncio.run(test_server())
     except KeyboardInterrupt:
         pass

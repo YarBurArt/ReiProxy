@@ -1,3 +1,5 @@
+import asyncio  # to work with non blocking code mitm
+
 from kivymd.app import MDApp
 from kivy.core.window import Window
 
@@ -21,5 +23,9 @@ class MainApp(MDApp):
         self.theme_cls.theme_style = "Dark"
 
 
+async def main():
+    app = MainApp()
+    await app.async_run(async_lib="asyncio")
+
 if __name__ == "__main__":
-    MainApp().run()
+    asyncio.run(main())

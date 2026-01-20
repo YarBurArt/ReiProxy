@@ -1,9 +1,15 @@
-# Kivy Lazy Loading - Template
-Enhance the performance of your Kivy app 🚀 with lazy loading.
+# ReiProxy
 
-By implementing this template, you can enhance the performance of your Kivy app through the technique of lazy loading screens. Rather than loading all the screens at startup, this approach ensures that screens are loaded only when they are actively switched to. As a result, the startup time of your app can be significantly reduced.
+A compact HTTP/HTTPS traffic analysis tool under development, written in Python with Kivy/KivyMD and targeted at Android phones and tablets. Unlike desktop-focused solutions, this app uses a Kivy multi-pane layout adapted for touch screens to make the most of limited space. Its core relies on mitmproxy’s async library for request handling, and the UI call the AndroidX Proxy-Override API for vpn mode. Features planned: built-in certificate authority management, basic hex viewing/editing of binary payloads (for now just webview of [CyberChef](https://gchq.github.io/CyberChef/)), and a gesture-friendly repeater for manual testing during mobile bug-bounty work.
 
-This template also features a **screen navigation system** that simplifies handling the back button.
+## Problem Statement
+
+This is not intended for bug‑bounty ordinary mobile apps, at least not yet, because secure certificate management at the OS level is harder than trusting certificates inside a browser. **It’s meant for situations where the only available devices are Android‑based.** Workarounds include using the [Caido](https://github.com/caido/caido) web interface, which isn’t enough adapted to limited resources and small screens; running a Linux environment via [AnLinux](https://github.com/EXALAB/AnLinux-App) or [Andronix](https://github.com/AndronixApp/AndronixOrigin) that uses proot + an Xorg server over TigerVNC to launch WM/DE and inside run Burp Suite (but this brings interface-adaptation issues, the need to keep session running, and possible lag); or trying [mitmweb](https://github.com/mitmproxy/mitmproxy/tree/main), which just lacks some features. This application is a prototype that aims to address those problems. In the future I plan to optimize the app using the NDK.
+
+Not a replacement but a companion tool, and a partial source of inspiration is [PCAPdroid](https://github.com/emanuele-f/PCAPdroid), which focuses on a slightly different objective and use case.
+
+## Installation Instructions & Usage
+...
 
 ### Navigation
 The [`Root`](https://github.com/kulothunganug/kivy-lazy-loading-template/blob/main/libs/uix/root.py) is based on [`ScreenManager`](https://kivy.org/doc/stable/api-kivy.uix.screenmanager.html) and additionally provides a few navigation methods: `push(screen_name, side)`, `push_replacement(screen_name, side)` and `pop()`.
@@ -26,7 +32,6 @@ To incorporate additional screens into your app, follow these steps:
 }
 ```
 This template already contains three screens as example which uses all the navigation methods.
-
 
 ## Buildozer
 To use this template for mobile devices, make sure to add **json** to your `buildozer.spec` file, such as

@@ -9,7 +9,37 @@ This is not intended for bug‑bounty ordinary mobile apps, at least not yet, be
 Not a replacement but a companion tool, and a partial source of inspiration is [PCAPdroid](https://github.com/emanuele-f/PCAPdroid), which focuses on a slightly different objective and use case.
 
 ## Installation Instructions & Usage
-...
+
+```bash
+git clone https://github.com/YarBurArt/ReiProxy.git
+```
+```bash
+cd ReiProxy
+```
+
+Install dependencies
+
+```bash
+uv sync
+```
+
+Run on desktop for testing
+
+```bash
+uv run python main.py
+```
+
+Build app
+
+```bash
+uv run --group build buildozer -v android debug
+```
+
+---
+
+## How it works
+
+> I was too lazy to write docs, this is what's left from the template.
 
 ### Navigation
 The [`Root`](https://github.com/kulothunganug/kivy-lazy-loading-template/blob/main/libs/uix/root.py) is based on [`ScreenManager`](https://kivy.org/doc/stable/api-kivy.uix.screenmanager.html) and additionally provides a few navigation methods: `push(screen_name, side)`, `push_replacement(screen_name, side)` and `pop()`.

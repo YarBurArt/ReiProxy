@@ -5,47 +5,48 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
+import io.yarburart.reiproxy.core.ProxyRequestRecord
 import io.yarburart.reiproxy.ui.components.AdaptiveSplitPane
-import io.yarburart.reiproxy.ui.components.ExpandableSection
-import io.yarburart.reiproxy.ui.components.NameValueRow
+import io.yarburart.reiproxy.ui.components.SyntaxHighlightedEditor
+import io.yarburart.reiproxy.ui.components.SyntaxHighlightedText
 
-data class HeaderEntry(val name: String, val value: String)
-data class ParamEntry(val name: String, val value: String)
-
+@PreviewScreenSizes()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RepeatScreen(modifier: Modifier = Modifier) {
-    // sample
-    var url by remember { mutableStateOf("api.example.com:443/v1/auth/login") }
-    var requestBody by remember { mutableStateOf("""{
-  "username": "admin",
-  "password": "test123"
-}""") }
-    var searchQuery by remember { mutableStateOf("") }
-    val headers = listOf(
-        HeaderEntry("Content-Type", "application/json"),
-        HeaderEntry("Authorization", "Bearer eyJhbG..."),
-    )
-    val params = listOf(
-        ParamEntry("version", "v1"),
-        ParamEntry("format", "json"),
-    )
+fun RepeatScreen(
+    modifier: Modifier = Modifier,
+    selectedRequest: ProxyRequestRecord? = null,
+) {
+    val rawReq = selectedRequest?.rawRequest?.takeIf { it.isNotBlank() }
+        ?: buildRawRequest(selectedRequest)
+    var rawRequestText by remember { mutableStateOf(TextFieldValue(rawReq)) }
+    val rawResp = selectedRequest?.rawResponse?.takeIf { it.isNotBlank() }
+        ?: buildRawResponse(selectedRequest)
+
+    val requestLines = rawRequestText.text.split("\n")
+    val urlLine = requestLines.firstOrNull() ?: ""
+    val hostHeader = requestLines.find { it.startsWith("Host:", ignoreCase = true) }
+    val hostFromHeader = hostHeader?.substringAfter(":")?.trim()
+    val fullUrl = hostFromHeader?.let { h ->
+        val path = urlLine.split(" ").getOrNull(1) ?: ""
+        "$h$path"
+    } ?: urlLine
 
     Column(modifier = modifier) {
-        // Top toolbar: send | cancel | prev / next
         Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             TextButton(onClick = { /* send */ }) { Text("Send") }
             TextButton(onClick = { /* cancel */ }) { Text("Cancel") }
@@ -56,81 +57,63 @@ fun RepeatScreen(modifier: Modifier = Modifier) {
         AdaptiveSplitPane(
             firstPane = {
                 Column(modifier = Modifier.fillMaxSize().weight(1f).padding(8.dp)) {
-                    Text("Request", modifier = Modifier.padding(8.dp))
-
-                    // Editable URL
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        label = { Text("URL") },
-                        placeholder = { Text("example.com:443") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Editable request body
-                    TextField(
-                        value = requestBody,
-                        onValueChange = { requestBody = it },
-                        label = { Text("Request Body") },
+                    Text("Request — $fullUrl", modifier = Modifier.padding(bottom = 4.dp))
+                    // Single editable highlighted editor
+                    SyntaxHighlightedEditor(
+                        value = rawRequestText,
+                        onValueChange = { rawRequestText = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        maxLines = Int.MAX_VALUE,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                        )
-                    )
-
-                    // Search at bottom of request
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        label = { Text("Search") },
-                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             secondPane = {
                 Column(modifier = Modifier.fillMaxSize().weight(1f).padding(8.dp)) {
-                    Text("Response", modifier = Modifier.padding(8.dp))
-
-                    // Response body placeholder
-                    Text(
-                        "Response body",
+                    Text("Response", modifier = Modifier.padding(bottom = 4.dp))
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .padding(8.dp)
-                    )
-                    ExpandableSection("Data") {
-                        // Expandable list of params and headers
-                        ExpandableSection("Headers") {
-                            Column {
-                                if (headers.isEmpty()) {
-                                    Text("No headers", modifier = Modifier.padding(16.dp))
-                                } else {
-                                    for (header in headers) {
-                                        NameValueRow(name = header.name, value = header.value)
-                                    }
-                                }
-                            }
-                        }
-
-                        ExpandableSection("Params") {
-                            Column {
-                                if (params.isEmpty()) {
-                                    Text("No params", modifier = Modifier.padding(16.dp))
-                                } else {
-                                    for (param in params) {
-                                        NameValueRow(name = param.name, value = param.value)
-                                    }
-                                }
-                            }
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        if (rawResp.isNotBlank()) {
+                            SyntaxHighlightedText(content = rawResp)
+                        } else {
+                            Text("No response captured")
                         }
                     }
                 }
             }
         )
+    }
+}
+
+internal fun buildRawRequest(req: ProxyRequestRecord?): String {
+    if (req == null) return ""
+    return buildString {
+        append("${req.method} ${req.url} HTTP/1.1\r\n")
+        if (req.requestHeaders.isNotBlank()) {
+            append(req.requestHeaders.replace("\n", "\r\n"))
+            append("\r\n")
+        }
+        if (req.requestBody.isNotBlank()) {
+            append("\r\n")
+            append(req.requestBody)
+        }
+    }
+}
+
+internal fun buildRawResponse(req: ProxyRequestRecord?): String {
+    if (req == null) return ""
+    return buildString {
+        append("HTTP/1.1 ${req.statusCode}\r\n")
+        if (req.responseHeaders.isNotBlank()) {
+            append(req.responseHeaders.replace("\n", "\r\n"))
+            append("\r\n")
+        }
+        if (req.responseBody.isNotBlank()) {
+            append("\r\n")
+            append(req.responseBody)
+        }
     }
 }

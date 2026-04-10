@@ -197,9 +197,11 @@ fun SettingsScreen(
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Theme") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded) },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded) },
                     modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                        .menuAnchor(
+                            ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
                         .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
@@ -268,7 +270,8 @@ fun SettingsScreen(
                     Text(
                         text = "Generate a new CA certificate and private key for MITM interception.",
                         modifier = Modifier.padding(vertical = 4.dp),
-                        fontSize = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        fontSize = androidx.compose.ui.unit.TextUnit(
+                            12f, androidx.compose.ui.unit.TextUnitType.Sp),
                         color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -284,7 +287,8 @@ fun SettingsScreen(
                 Text(
                     text = state.certInfo.certPem,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    fontSize = androidx.compose.ui.unit.TextUnit(
+                        10f, androidx.compose.ui.unit.TextUnitType.Sp),
                 )
             },
             confirmButton = {

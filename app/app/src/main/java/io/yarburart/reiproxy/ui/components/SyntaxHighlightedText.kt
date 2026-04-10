@@ -1,23 +1,14 @@
 package io.yarburart.reiproxy.ui.components
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -29,9 +20,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.min
 
 private data class SyntaxSpan(
     val text: String,
@@ -53,13 +42,16 @@ fun SyntaxHighlightedText(
     )
 }
 private fun buildAnnotatedForSyntax(content: String): AnnotatedString {
+    val normalized = content.replace(
+        "\r\n", "\n"
+    ).replace("\r", "\n")
     return buildAnnotatedString {
-        val format = detectFormat(content)
+        val format = detectFormat(normalized)
         val spans = when (format) {
-            Format.JSON -> highlightJson(content)
-            Format.HTTP -> highlightHttp(content)
-            Format.XML -> highlightXml(content)
-            Format.PLAIN -> listOf(SyntaxSpan(content, Color(0xFFD4D4D4)))
+            Format.JSON -> highlightJson(normalized)
+            Format.HTTP -> highlightHttp(normalized)
+            Format.XML -> highlightXml(normalized)
+            Format.PLAIN -> listOf(SyntaxSpan(normalized, Color(0xFFD4D4D4)))
         }
         spans.forEach { span ->
             pushStyle(SpanStyle(color = span.color))
@@ -75,15 +67,14 @@ private fun detectFormat(content: String): Format {
     val trimmed = content.trim()
     if (trimmed.isEmpty()) return Format.PLAIN
 
-    // JSON detection
     if ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
         (trimmed.startsWith("[") && trimmed.endsWith("]"))
     ) {
         return Format.JSON
     }
 
-    // HTTP request/response detection
-    val httpMethods = listOf("GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "OPTIONS ", "PATCH ", "TRACE ", "CONNECT ")
+    val httpMethods = listOf(
+        "GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "OPTIONS ", "PATCH ", "TRACE ", "CONNECT ")
     val firstLine = trimmed.lineSequence().firstOrNull() ?: ""
     if (httpMethods.any { firstLine.startsWith(it) } ||
         firstLine.matches(Regex("HTTP/\\d\\.\\d \\d{3} .*"))
@@ -91,7 +82,6 @@ private fun detectFormat(content: String): Format {
         return Format.HTTP
     }
 
-    // XML/HTML detection
     if (trimmed.startsWith("<") && trimmed.contains("</")) {
         return Format.XML
     }
@@ -128,7 +118,6 @@ private fun highlightJson(content: String): List<SyntaxSpan> {
     while (i < len) {
         val c = content[i]
 
-        // Skip whitespace
         if (c.isWhitespace()) {
             val start = i
             while (i < len && content[i].isWhitespace()) i++
@@ -136,7 +125,6 @@ private fun highlightJson(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Structural characters
         if (c in "{}[]") {
             spans.add(SyntaxSpan(c.toString(), colors.brace))
             i++
@@ -155,30 +143,26 @@ private fun highlightJson(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // String
         if (c == '"') {
             val start = i
-            i++ // skip opening quote
+            i++
             while (i < len) {
                 if (content[i] == '\\' && i + 1 < len) {
-                    i += 2 // skip escaped char
+                    i += 2
                 } else if (content[i] == '"') {
-                    i++ // skip closing quote
+                    i++
                     break
                 } else {
                     i++
                 }
             }
             val str = content.substring(start, i)
-
-            // Peek ahead to see if this is a key (followed by optional whitespace + colon)
             val rest = content.substring(i).takeWhile { it.isWhitespace() }
             val isKey = content.substring(i + rest.length).startsWith(":")
             spans.add(SyntaxSpan(str, if (isKey) colors.key else colors.string))
             continue
         }
 
-        // Number
         if (c.isDigit() || c == '-') {
             val start = i
             while (i < len && (content[i].isDigit() || content[i] in ".eE+-")) i++
@@ -186,7 +170,6 @@ private fun highlightJson(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Keywords: true, false, null
         if (content.startsWith("true", i)) {
             spans.add(SyntaxSpan("true", colors.boolean))
             i += 4
@@ -203,7 +186,6 @@ private fun highlightJson(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Fallback
         spans.add(SyntaxSpan(c.toString(), Color(0xFFD4D4D4)))
         i++
     }
@@ -225,7 +207,8 @@ private fun highlightHttp(content: String): List<SyntaxSpan> {
     val spans = mutableListOf<SyntaxSpan>()
     val lines = content.split("\n")
     var isBody = false
-    val httpMethods = listOf("GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT")
+    val httpMethods = listOf(
+        "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT")
 
     for (line in lines) {
         if (isBody) {
@@ -240,15 +223,12 @@ private fun highlightHttp(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Request line: METHOD /path HTTP/x.x
         val firstPart = line.substringBefore(" ")
         if (httpMethods.contains(firstPart)) {
             val parts = line.split(" ", limit = 3)
-            // Method
             spans.add(SyntaxSpan(parts[0], methodColor))
             if (parts.size > 1) {
                 spans.add(SyntaxSpan(" ", lineBreakColor))
-                // URL
                 spans.add(SyntaxSpan(parts[1], urlColor))
             }
             if (parts.size > 2) {
@@ -259,7 +239,6 @@ private fun highlightHttp(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Response line: HTTP/x.x STATUS_CODE Reason
         if (line.matches(Regex("HTTP/\\d\\.\\d \\d{3}.*"))) {
             val match = Regex("(HTTP/\\d\\.\\d) (\\d{3}) (.*)").matchEntire(line)
             if (match != null) {
@@ -283,7 +262,6 @@ private fun highlightHttp(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Header line: Name: Value
         val colonIdx = line.indexOf(':')
         if (colonIdx > 0) {
             spans.add(SyntaxSpan(line.substring(0, colonIdx), headerNameColor))
@@ -324,30 +302,25 @@ private fun highlightXml(content: String): List<SyntaxSpan> {
             continue
         }
 
-        // Tag open/close
         if (c == '<') {
             val start = i
             i++
-            // Read tag name and attributes until >
             while (i < len && content[i] != '>') i++
-            if (i < len) i++ // skip >
+            if (i < len) i++
             val tag = content.substring(start, i)
             spans.add(SyntaxSpan(tag, tagColor))
             continue
         }
 
-        // Attribute value in quotes (inside tags)
         if (c == '"' || c == '\'') {
-            val quote = c
             val start = i
             i++
-            while (i < len && content[i] != quote) i++
+            while (i < len && content[i] != c) i++
             if (i < len) i++
             spans.add(SyntaxSpan(content.substring(start, i), attrValueColor))
             continue
         }
 
-        // Text content
         val start = i
         while (i < len && content[i] != '<' && !content[i].isWhitespace()) i++
         if (i > start) {
@@ -403,7 +376,7 @@ fun SyntaxHighlightedEditor(
     val annotated = remember(value.text) { buildAnnotatedForSyntax(value.text) }
 
     Box(modifier = modifier.fillMaxWidth()) {
-       Text(
+        Text(
             text = annotated,
             fontFamily = FontFamily.Monospace,
             fontSize = fontSize,
@@ -411,7 +384,6 @@ fun SyntaxHighlightedEditor(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        // Transparent editable text field on top
         BasicTextField(
             value = value,
             onValueChange = onValueChange,

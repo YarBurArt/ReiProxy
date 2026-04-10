@@ -20,6 +20,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -34,21 +35,22 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.yarburart.reiproxy.core.ProxyRequestRecord
-import io.yarburart.reiproxy.ui.components.AdaptiveSplitPane
+import io.yarburart.reiproxy.ui.components.ResizableSplitPane
 import io.yarburart.reiproxy.ui.components.EmptyState
 import io.yarburart.reiproxy.ui.components.ScreenTitle
 import io.yarburart.reiproxy.ui.components.SyntaxHighlightedText
 
-@PreviewScreenSizes()
+@PreviewScreenSizes
 @Composable
 fun HistoryScreen(
     modifier: Modifier = Modifier,
     requests: List<ProxyRequestRecord> = emptyList(),
     onClear: () -> Unit = {},
     onRequestSelected: (ProxyRequestRecord?) -> Unit = {},
+    onNavigateToRepeat: () -> Unit = {},
 ) {
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
-    var viewTab by remember { mutableIntStateOf(0) } // 0=Request, 1=Response
+    var viewTab by remember { mutableIntStateOf(0) }
 
     if (selectedIndex != null && selectedIndex!! >= requests.size) {
         selectedIndex = null
@@ -73,7 +75,7 @@ fun HistoryScreen(
         if (requests.isEmpty()) {
             EmptyState("No requests recorded")
         } else {
-            AdaptiveSplitPane(
+            ResizableSplitPane(
                 firstPane = {
                     Column(modifier = Modifier.fillMaxSize().weight(1f)) {
                         HistoryHeader()
@@ -99,33 +101,43 @@ fun HistoryScreen(
                         if (selectedIndex != null && requests.isNotEmpty()) {
                             val selected = requests[selectedIndex!!]
 
-                            val options = listOf("Request", "Response")
-                            SingleChoiceSegmentedButtonRow(
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                options.forEachIndexed { i, label ->
-                                    SegmentedButton(
-                                        shape = SegmentedButtonDefaults.itemShape(
-                                            index = i,
-                                            count = options.size
-                                        ),
-                                        onClick = { viewTab = i },
-                                        selected = viewTab == i,
-                                    ) {
-                                        Text(label)
+                                val options = listOf("Request", "Response")
+                                SingleChoiceSegmentedButtonRow {
+                                    options.forEachIndexed { i, label ->
+                                        SegmentedButton(
+                                            shape = SegmentedButtonDefaults.itemShape(
+                                                index = i,
+                                                count = options.size
+                                            ),
+                                            onClick = { viewTab = i },
+                                            selected = viewTab == i,
+                                        ) {
+                                            Text(label)
+                                        }
                                     }
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        onRequestSelected(selected)
+                                        onNavigateToRepeat()
+                                    },
+                                    modifier = Modifier.padding(start = 8.dp),
+                                ) {
+                                    Text("To Repeater", fontSize = 12.sp)
                                 }
                             }
 
-                            // Detail tabs: Headers / Body
                             val content = if (viewTab == 0) {
-                                if (selected.rawRequest.isNotBlank()) selected.rawRequest
-                                else buildRequestText(selected)
+                                selected.rawRequest.ifBlank { buildRequestText(selected) }
                             } else {
-                                if (selected.rawResponse.isNotBlank()) selected.rawResponse
-                                else buildResponseText(selected)
+                                selected.rawResponse.ifBlank { buildResponseText(selected) }
                             }
 
                             Column(
@@ -183,8 +195,10 @@ private fun HistoryHeader() {
     ) {
         Text("#", modifier = Modifier.width(32.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Text("Method", modifier = Modifier.width(72.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Text("Host", modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("URL", modifier = Modifier.weight(2f), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("Host", modifier = Modifier.weight(1f), fontSize = 12.sp,
+            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("URL", modifier = Modifier.weight(2f), fontSize = 12.sp,
+            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text("Status", modifier = Modifier.width(56.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Text("Len", modifier = Modifier.width(48.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Text("Type", modifier = Modifier.width(48.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)

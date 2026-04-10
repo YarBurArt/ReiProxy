@@ -17,7 +17,8 @@ fun EmptyState(message: String, modifier: Modifier = Modifier) {
         Text(
             text = message,
             fontSize = 16.sp,
-            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            color = androidx.compose.material3.MaterialTheme
+                .colorScheme.onSurface.copy(alpha = 0.6f)
         )
     }
 }

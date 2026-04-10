@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -247,45 +246,49 @@ private fun ProjectDetailView(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Text("Project Details", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            Text("Project Details", modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
         // Project info
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            Text("Name", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(project.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
-
-            Text("Description", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(project.description, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 12.dp))
-
+            Text("Name", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(project.name, style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 12.dp))
+            Text("Description", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(project.description, style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(bottom = 12.dp))
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            Text("Captured Requests", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("$historyCount requests", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
-
+            Text("Captured Requests", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("$historyCount requests", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 12.dp))
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            // Active status
+            // Active status of project
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column {
-                    Text("Active Project", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Active Project", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
-                        if (isActive) "Yes — History, Repeat, Automate will use this" else "No — Select to use this project",
+                        if (isActive) "Yes — History, Repeat, Automate will use this"
+                        else "No — Select to use this project",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-                if (!isActive) {
-                    Button(onClick = onSetActive) {
-                        Text("Activate")
-                    }
+                if (!isActive) { Button(onClick = onSetActive) { Text("Activate") }
                 } else {
-                    Text("✓", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                    Text("✓", color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.headlineSmall)
                 }
             }
         }

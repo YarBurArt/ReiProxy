@@ -15,17 +15,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import com.github.monkeywie.proxyee.crt.CertUtil
@@ -47,6 +47,7 @@ import io.yarburart.reiproxy.ui.screens.RepeatScreen
 import io.yarburart.reiproxy.ui.screens.SettingsScreen
 import io.yarburart.reiproxy.ui.screens.SettingsState
 import io.yarburart.reiproxy.ui.theme.ReiProxyTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -68,7 +69,6 @@ class MainActivity : ComponentActivity() {
             var appTheme by remember { mutableStateOf(AppTheme.SYSTEM) }
             var activeProjectId by rememberSaveable { mutableStateOf<Long?>(null) }
 
-            // Sync active project to ProxyManager for DB saves
             activeProjectId?.let { ProxyManager.setActiveProjectId(it) }
 
             ReiProxyTheme(themeMode = appTheme.mode) {
@@ -80,12 +80,17 @@ class MainActivity : ComponentActivity() {
                     settingsManager = settingsManager,
                     activeProjectId = activeProjectId,
                     onProjectSelected = { activeProjectId = it },
-                    onThemeFromSettings = { appTheme = it },
                 )
             }
         }
     }
 }
+
+data class AppScreen(
+    val isRunning: Boolean,
+    val projects: List<Project>,
+    val requestHistory: List<ProxyRequestRecord>,
+)
 
 @PreviewScreenSizes
 @Composable
@@ -97,177 +102,307 @@ fun ReiProxyApp(
     settingsManager: SettingsManager? = null,
     activeProjectId: Long? = null,
     onProjectSelected: (Long?) -> Unit = {},
-    onThemeFromSettings: (AppTheme) -> Unit = {},
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
-
-    val proxyConfig by ProxyManager.activeConfig.collectAsState()
-    val isRunning by ProxyManager.isRunning.collectAsState()
-
-    // DB-backed history flow
-    val requestHistory: List<ProxyRequestRecord> = if (activeProjectId != null && historyRepository != null) {
-        historyRepository.getHistoryByProject(activeProjectId).collectAsState(emptyList()).value
-    } else {
-        ProxyManager.requestHistory.collectAsState().value
-    }
-
-    // Projects flow
-    val projects: List<Project> = if (projectRepository != null) {
-        projectRepository.getAllProjects().collectAsState(emptyList()).value
-    } else {
-        emptyList()
-    }
-
-    // Per-project settings flow
-    val projectSettings: io.yarburart.reiproxy.data.ProjectSettings? = if (activeProjectId != null && settingsManager != null) {
-        settingsManager.getSettingsFlow(activeProjectId).collectAsState(null).value
-    } else {
-        null
-    }
-
-    val scope = rememberCoroutineScope()
-
-    // Settings state (from DB or defaults)
-    var settingsHost by remember { mutableStateOf(projectSettings?.host ?: proxyConfig.host) }
-    var settingsPort by remember { mutableStateOf(projectSettings?.port?.toString() ?: proxyConfig.port.toString()) }
-    var interceptEnabled by remember { mutableStateOf(projectSettings?.interceptEnabled ?: false) }
-    var handleSsl by remember { mutableStateOf(projectSettings?.handleSsl ?: true) }
-    var currentCert by remember { mutableStateOf<CertInfo?>(null) }
-
-    // Sync settings when projectSettings changes
-    if (projectSettings != null) {
-        settingsHost = projectSettings!!.host
-        settingsPort = projectSettings!!.port.toString()
-        interceptEnabled = projectSettings!!.interceptEnabled
-        handleSsl = projectSettings!!.handleSsl
-    }
-
-    // Shared selected request for Repeat/Automate
     var selectedRequest by remember { mutableStateOf<ProxyRequestRecord?>(null) }
 
+    val screen = rememberScreenState(
+        activeProjectId, projectRepository, historyRepository, settingsManager)
+    val projectSettings = rememberProjectSettings(activeProjectId, settingsManager)
+    val proxyConfig by ProxyManager.activeConfig.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    val settings = rememberSettingsState(projectSettings, proxyConfig)
+    val actions = rememberProxyActions(
+        scope = scope,
+        activeProjectId = activeProjectId,
+        settingsManager = settingsManager,
+        settings = settings,
+        screen = screen,
+        onThemeChange = onThemeChange,
+    )
+
+    var currentCert by remember { mutableStateOf<CertInfo?>(null) }
     val settingsState = SettingsState(
-        proxyHost = settingsHost,
-        proxyPort = settingsPort,
-        interceptEnabled = interceptEnabled,
-        proxyRunning = isRunning,
-        handleSsl = handleSsl,
+        proxyHost = settings.host,
+        proxyPort = settings.port,
+        interceptEnabled = settings.interceptEnabled,
+        proxyRunning = screen.isRunning,
+        handleSsl = settings.handleSsl,
         theme = theme,
         certInfo = currentCert,
     )
 
-    fun handleStartStopProxy() {
-        if (activeProjectId == null) return
-        scope.launch {
-            if (isRunning) {
-                ProxyManager.stop()
-            } else {
-                val port = settingsPort.toIntOrNull() ?: 8080
-                val config = ProxyConfig(
-                    host = settingsHost,
-                    port = port,
-                    handleSsl = handleSsl,
-                    interceptEnabled = interceptEnabled,
-                )
-                ProxyManager.updateConfig(config)
-                // Save settings for this project
-                settingsManager?.updateHost(activeProjectId, settingsHost)
-                settingsManager?.updatePort(activeProjectId, port)
-                settingsManager?.updateInterceptEnabled(activeProjectId, interceptEnabled)
-                settingsManager?.updateHandleSsl(activeProjectId, handleSsl)
-                ProxyManager.start(config)
-            }
+    NavigationSuite(currentDestination, { currentDestination = it }) { padding ->
+        when (currentDestination) {
+            AppDestinations.HOME -> HomeContent(
+                padding, screen, activeProjectId, onProjectSelected,
+                projectRepository, scope, actions.startStopProxy)
+            AppDestinations.HISTORY -> HistoryContent(
+                padding, screen, activeProjectId, historyRepository, scope,
+                onRequestSelected = { selectedRequest = it },
+                onNavigateToRepeat = { currentDestination = AppDestinations.REPEAT },
+            )
+            AppDestinations.AUTOMATE -> AutomateScreen(
+                modifier = padding, selectedRequest = selectedRequest)
+            AppDestinations.REPEAT -> RepeatContent(
+                padding, selectedRequest, historyRepository, activeProjectId, screen)
+            AppDestinations.DECODE -> DecodeScreen(modifier = padding)
+            AppDestinations.SETTINGS -> SettingsContent(
+                padding, settingsState, settings, actions) { currentCert = it }
         }
     }
+}
 
-    fun handleGenerateCert(): CertInfo {
-        val cert = generateDefaultCert()
-        currentCert = cert
-        return cert
+@Composable
+private fun rememberProjectSettings(
+    activeProjectId: Long?,
+    settingsManager: SettingsManager?,
+): io.yarburart.reiproxy.data.ProjectSettings? {
+    return if (activeProjectId != null && settingsManager != null) {
+        settingsManager.getSettingsFlow(activeProjectId).collectAsState(null).value
+    } else {
+        null
+    }
+}
+
+@Composable
+private fun rememberScreenState(
+    activeProjectId: Long?,
+    projectRepository: ProjectRepository?,
+    historyRepository: HistoryRepository?,
+    settingsManager: SettingsManager?,
+): AppScreen {
+    val isRunning by ProxyManager.isRunning.collectAsState()
+
+    val requestHistory: List<ProxyRequestRecord> =
+        if (activeProjectId != null && historyRepository != null) {
+            historyRepository.getHistoryByProject(
+                activeProjectId).collectAsState(emptyList()).value
+        } else {
+            ProxyManager.requestHistory.collectAsState().value
+        }
+
+    val projects = projectRepository?.getAllProjects()?.collectAsState(
+        emptyList()
+    )?.value ?: emptyList()
+
+    return remember(isRunning, projects, requestHistory) {
+        AppScreen(isRunning, projects, requestHistory)
+    }
+}
+
+data class SettingsStateHolder(
+    var host: String,
+    var port: String,
+    var interceptEnabled: Boolean,
+    var handleSsl: Boolean,
+)
+
+@Composable
+private fun rememberSettingsState(
+    projectSettings: io.yarburart.reiproxy.data.ProjectSettings?,
+    proxyConfig: ProxyConfig,
+): SettingsStateHolder {
+    val state = remember {
+        mutableStateOf(
+            SettingsStateHolder(
+                host = projectSettings?.host ?: proxyConfig.host,
+                port = projectSettings?.port?.toString() ?: proxyConfig.port.toString(),
+                interceptEnabled = projectSettings?.interceptEnabled ?: false,
+                handleSsl = projectSettings?.handleSsl ?: true,
+            )
+        )
     }
 
+    LaunchedEffect(projectSettings, proxyConfig) {
+        state.value = SettingsStateHolder(
+            host = projectSettings?.host ?: proxyConfig.host,
+            port = projectSettings?.port?.toString() ?: proxyConfig.port.toString(),
+            interceptEnabled = projectSettings?.interceptEnabled ?: false,
+            handleSsl = projectSettings?.handleSsl ?: true,
+        )
+    }
+
+    return state.value
+}
+
+data class ProxyActions(
+    val startStopProxy: () -> Unit,
+    val generateCert: () -> CertInfo,
+    val changeTheme: (AppTheme) -> Unit,
+)
+
+@Composable
+private fun rememberProxyActions(
+    scope: CoroutineScope,
+    activeProjectId: Long?,
+    settingsManager: SettingsManager?,
+    settings: SettingsStateHolder,
+    screen: AppScreen,
+    onThemeChange: (AppTheme) -> Unit,
+): ProxyActions {
+    val currentActiveId by rememberUpdatedState(activeProjectId)
+    val currentSettings by rememberUpdatedState(settings)
+    val currentScreen by rememberUpdatedState(screen)
+    val currentOnThemeChange by rememberUpdatedState(onThemeChange)
+
+    return remember {
+        ProxyActions(
+            startStopProxy = start@{
+                val projectId = currentActiveId ?: return@start
+                scope.launch {
+                    if (currentScreen.isRunning) {
+                        ProxyManager.stop()
+                    } else {
+                        val port = currentSettings.port.toIntOrNull() ?: 8080
+                        val config = ProxyConfig(
+                            currentSettings.host, port,
+                            currentSettings.handleSsl,
+                            currentSettings.interceptEnabled)
+                        ProxyManager.updateConfig(config)
+                        settingsManager?.updateHost(projectId, currentSettings.host)
+                        settingsManager?.updatePort(projectId, port)
+                        settingsManager?.updateInterceptEnabled(
+                            projectId, currentSettings.interceptEnabled)
+                        settingsManager?.updateHandleSsl(
+                            projectId, currentSettings.handleSsl)
+                        ProxyManager.start(config)
+                    }
+                }
+            },
+            generateCert = { generateDefaultCert() },
+            changeTheme = { newTheme ->
+                currentOnThemeChange(newTheme)
+                val projectId = currentActiveId
+                if (projectId != null) {
+                    scope.launch {
+                        settingsManager?.updateThemeMode(projectId, newTheme.mode)
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun NavigationSuite(
+    currentDestination: AppDestinations,
+    onNavigate: (AppDestinations) -> Unit,
+    content: @Composable (Modifier) -> Unit,
+) {
     NavigationSuiteScaffold(
         navigationSuiteItems = {
-            AppDestinations.entries.forEach {
+            AppDestinations.entries.forEach { dest ->
                 item(
-                    icon = {
-                        Icon(
-                            painterResource(it.icon),
-                            contentDescription = it.label
-                        )
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestination = it },
-                    modifier = Modifier.padding(horizontal = 2.dp)
+                    icon = { Icon(painterResource(dest.icon), contentDescription = dest.label) },
+                    label = { Text(dest.label) },
+                    selected = dest == currentDestination,
+                    onClick = { onNavigate(dest) },
+                    modifier = Modifier.padding(horizontal = 2.dp),
                 )
             }
-        }
+        },
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            val modifier = Modifier.padding(innerPadding)
-            when (currentDestination) {
-                AppDestinations.HOME -> HomeScreen(
-                    modifier = modifier,
-                    projects = projects,
-                    activeProjectId = activeProjectId,
-                    historyCount = requestHistory.size,
-                    proxyRunning = isRunning,
-                    onProjectSelected = onProjectSelected,
-                    onProjectCreated = { name, desc ->
-                        projectRepository?.let { repo ->
-                            scope.launch { repo.insertProject(name, desc) }
-                        }
-                    },
-                    onProjectDeleted = { project ->
-                        projectRepository?.let { repo ->
-                            scope.launch { repo.deleteProject(project) }
-                        }
-                    },
-                    onStartProxy = { handleStartStopProxy() },
-                    onStopProxy = { handleStartStopProxy() },
-                )
-                AppDestinations.HISTORY -> HistoryScreen(
-                    modifier = modifier,
-                    requests = requestHistory,
-                    onClear = {
-                        if (activeProjectId != null) {
-                            scope.launch { historyRepository?.clearHistoryByProject(activeProjectId) }
-                        } else {
-                            ProxyManager.clearHistory()
-                        }
-                    },
-                    onRequestSelected = { selectedRequest = it },
-                )
-                AppDestinations.AUTOMATE -> AutomateScreen(
-                    modifier = modifier,
-                    selectedRequest = selectedRequest,
-                )
-                AppDestinations.REPEAT -> RepeatScreen(
-                    modifier = modifier,
-                    selectedRequest = selectedRequest,
-                )
-                AppDestinations.DECODE -> DecodeScreen(modifier = modifier)
-                AppDestinations.SETTINGS -> SettingsScreen(
-                    modifier = modifier,
-                    state = settingsState,
-                    onHostChange = { settingsHost = it },
-                    onPortChange = { settingsPort = it },
-                    onInterceptToggle = { interceptEnabled = it },
-                    onStartStopProxy = { handleStartStopProxy() },
-                    onThemeChange = { newTheme ->
-                        onThemeChange(newTheme)
-                        if (activeProjectId != null) {
-                            scope.launch {
-                                settingsManager?.updateThemeMode(activeProjectId, newTheme.mode)
-                            }
-                        }
-                    },
-                    onGenerateCert = { handleGenerateCert() },
-                    onExportCert = { cert, ctx -> exportCert(cert, ctx) },
-                )
-            }
+            content(Modifier.padding(innerPadding))
         }
     }
+}
+
+@Composable
+private fun HomeContent(
+    modifier: Modifier,
+    screen: AppScreen,
+    activeProjectId: Long?,
+    onProjectSelected: (Long?) -> Unit,
+    projectRepository: ProjectRepository?,
+    scope: CoroutineScope,
+    onStartStop: () -> Unit,
+) {
+    HomeScreen(
+        modifier = modifier,
+        projects = screen.projects,
+        activeProjectId = activeProjectId,
+        historyCount = screen.requestHistory.size,
+        proxyRunning = screen.isRunning,
+        onProjectSelected = onProjectSelected,
+        onProjectCreated = { name, desc ->
+            projectRepository?.let { scope.launch { it.insertProject(name, desc) } }
+        },
+        onProjectDeleted = { project ->
+            projectRepository?.let { scope.launch { it.deleteProject(project) } }
+        },
+        onStartProxy = onStartStop,
+        onStopProxy = onStartStop,
+    )
+}
+
+@Composable
+private fun HistoryContent(
+    modifier: Modifier,
+    screen: AppScreen,
+    activeProjectId: Long?,
+    historyRepository: HistoryRepository?,
+    scope: CoroutineScope,
+    onRequestSelected: (ProxyRequestRecord?) -> Unit,
+    onNavigateToRepeat: () -> Unit,
+) {
+    HistoryScreen(
+        modifier = modifier,
+        requests = screen.requestHistory,
+        onClear = {
+            if (activeProjectId != null) {
+                scope.launch { historyRepository?.clearHistoryByProject(activeProjectId) }
+            } else {
+                ProxyManager.clearHistory()
+            }
+        },
+        onRequestSelected = onRequestSelected,
+        onNavigateToRepeat = onNavigateToRepeat,
+    )
+}
+
+@Composable
+private fun RepeatContent(
+    modifier: Modifier,
+    selectedRequest: ProxyRequestRecord?,
+    historyRepository: HistoryRepository?,
+    activeProjectId: Long?,
+    screen: AppScreen,
+) {
+    RepeatScreen(
+        modifier = modifier,
+        selectedRequest = selectedRequest,
+        historyRepository = historyRepository,
+        activeProjectId = activeProjectId,
+        requests = screen.requestHistory,
+    )
+}
+
+@Composable
+private fun SettingsContent(
+    modifier: Modifier,
+    state: SettingsState,
+    settings: SettingsStateHolder,
+    actions: ProxyActions,
+    onCertGenerated: (CertInfo) -> Unit,
+) {
+    SettingsScreen(
+        modifier = modifier,
+        state = state,
+        onHostChange = { settings.host = it },
+        onPortChange = { settings.port = it },
+        onInterceptToggle = { settings.interceptEnabled = it },
+        onStartStopProxy = { actions.startStopProxy() },
+        onThemeChange = { actions.changeTheme(it) },
+        onGenerateCert = {
+            val cert = actions.generateCert()
+            onCertGenerated(cert)
+            cert
+        },
+        onExportCert = { cert, ctx -> exportCert(cert, ctx) },
+    )
 }
 
 enum class AppDestinations(
@@ -279,10 +414,8 @@ enum class AppDestinations(
     AUTOMATE("Auto", R.drawable.outline_eye_tracking_24),
     REPEAT("Repeat", R.drawable.outline_autorenew_24),
     DECODE("Decode", R.drawable.outline_encrypted_24),
-    SETTINGS("Settings", R.drawable.rounded_dashboard_2_gear_24)
+    SETTINGS("Settings", R.drawable.rounded_dashboard_2_gear_24),
 }
-
-// ---------- Certificate helpers (moved from SettingsScreen) ----------
 
 private fun generateDefaultCert(): CertInfo {
     val keyPair = CertUtil.genKeyPair()
@@ -290,11 +423,7 @@ private fun generateDefaultCert(): CertInfo {
     val expiry = Date(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(3650))
     val caCert = CertUtil.genCACert(
         "C=CN, ST=GD, L=SZ, O=ReiProxy, OU=Dev, CN=ReiProxy CA",
-        now,
-        expiry,
-        keyPair,
-    )
-
+        now, expiry, keyPair)
     return CertInfo(
         subject = CertUtil.getSubject(caCert),
         issuer = caCert.issuerX500Principal.name,
@@ -320,8 +449,12 @@ private fun exportCert(certInfo: CertInfo, context: Context) {
     }
     try {
         (context as? Activity)?.startActivityForResult(intent, 1001)
-        Toast.makeText(context, "Select a location to save the certificate", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context, "Select a location to save the certificate",
+            Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
-        Toast.makeText(context, "Could not open file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context, "Could not open file picker: ${e.message}",
+            Toast.LENGTH_SHORT).show()
     }
 }

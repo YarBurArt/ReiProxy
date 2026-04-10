@@ -19,15 +19,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import io.yarburart.reiproxy.data.HistoryRepository
 
-private fun Char.isPrintableChar(): Boolean =
-    isISOControl().not() && this != Char.MIN_VALUE
+private fun Char.isPrintableChar(): Boolean = isPrintableExtended()
 
+private fun extractCharset(headersString: String): Charset {
+    val contentTypeLine = headersString.lineSequence().find {
+        it.startsWith("Content-Type:", ignoreCase = true)
+    } ?: return StandardCharsets.UTF_8
+    val charsetParam = contentTypeLine.substringAfter(":").split(";")
+        .map { it.trim() }
+        .find { it.startsWith("charset=", ignoreCase = true) }
+        ?: return StandardCharsets.UTF_8
+    val charsetName = charsetParam.substringAfter("=", "UTF-8")
+    return try { Charset.forName(charsetName) } catch (_: Exception) { StandardCharsets.UTF_8 }
+}
 
 data class ProxyConfig(
     val host: String = "127.0.0.1",
@@ -53,8 +63,6 @@ data class ProxyRequestRecord(
     val rawResponse: String = "",
 )
 
-// ---------- ProxyManager ----------
-
 object ProxyManager {
 
     private const val TAG = "ProxyManager"
@@ -72,19 +80,15 @@ object ProxyManager {
     private var historyRepository: HistoryRepository? = null
     private var activeProjectId: Long = 0
 
-    fun setHistoryRepository(repo: HistoryRepository) {
-        historyRepository = repo
-    }
-
-    fun setActiveProjectId(projectId: Long) {
-        activeProjectId = projectId
-    }
+    fun setHistoryRepository(repo: HistoryRepository) { historyRepository = repo }
+    fun setActiveProjectId(projectId: Long) { activeProjectId = projectId }
 
     @Volatile
     private var server: HttpProxyServer? = null
     private val isRunningFlag = AtomicBoolean(false)
 
     private val pendingRequests = ConcurrentHashMap<String, CapturedRequest>()
+    private val responseMap = ConcurrentHashMap<String, CapturedResponse>()
     private val idCounter = java.util.concurrent.atomic.AtomicLong(0)
 
     private data class CapturedRequest(
@@ -94,7 +98,8 @@ object ProxyManager {
         var url: String,
         var headers: String,
         var body: StringBuilder,
-        var rawRequest: StringBuilder, // full raw: METHOD URL HTTP/1.1\r\nHeaders...\r\n\r\nBody
+        var rawRequest: StringBuilder,
+        var charset: Charset = StandardCharsets.UTF_8,
     )
 
     private data class CapturedResponse(
@@ -102,55 +107,50 @@ object ProxyManager {
         var statusCode: Int,
         var headers: String,
         var body: StringBuilder,
-        var rawResponse: StringBuilder, // full raw: HTTP/1.1 200 OK\r\nHeaders...\r\n\r\nBody
+        var rawResponse: StringBuilder,
+        var charset: Charset = StandardCharsets.UTF_8,
     )
 
-    fun updateConfig(config: ProxyConfig) {
-        _activeConfig.value = config
-    }
+    fun updateConfig(config: ProxyConfig) { _activeConfig.value = config }
 
-    suspend fun start(config: ProxyConfig = _activeConfig.value): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            if (!isRunningFlag.compareAndSet(false, true)) {
-                return@withContext Result.failure(IllegalStateException("Proxy already running"))
-            }
-
-            _activeConfig.value = config
-            server = HttpProxyServer()
-
-            val serverConfig = HttpProxyServerConfig().apply {
-                setHandleSsl(config.handleSsl)
-            }
-
-            try {
-                server!!
-                    .serverConfig(serverConfig)
-                    .proxyInterceptInitializer(buildInterceptInitializer())
-                    .startAsync(config.port)
-                    .thenAccept {
-                        _isRunning.value = true
-                        Log.i(TAG, "Proxy started on ${config.host}:${config.port}")
-                    }
-                    .exceptionally { e ->
-                        isRunningFlag.set(false)
-                        _isRunning.value = false
-                        Log.e(TAG, "Failed to start proxy", e)
-                        null
-                    }
-                Result.success(Unit)
-            } catch (e: Exception) {
-                isRunningFlag.set(false)
-                _isRunning.value = false
-                Log.e(TAG, "Failed to start proxy", e)
-                Result.failure(e)
-            }
+    suspend fun start(
+        config: ProxyConfig = _activeConfig.value
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        if (!isRunningFlag.compareAndSet(false, true)) {
+            return@withContext Result.failure(
+                IllegalStateException("Proxy already running"))
         }
+        _activeConfig.value = config
+        server = HttpProxyServer()
+        val serverConfig = HttpProxyServerConfig().apply { setHandleSsl(config.handleSsl) }
+        try {
+            server!!
+                .serverConfig(serverConfig)
+                .proxyInterceptInitializer(buildInterceptInitializer())
+                .startAsync(config.port)
+                .thenAccept {
+                    _isRunning.value = true
+                    Log.i(TAG, "Proxy started on ${config.host}:${config.port}")
+                }
+                .exceptionally { e ->
+                    isRunningFlag.set(false)
+                    _isRunning.value = false
+                    Log.e(TAG, "Failed to start proxy", e)
+                    null
+                }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            isRunningFlag.set(false)
+            _isRunning.value = false
+            Log.e(TAG, "Failed to start proxy", e)
+            Result.failure(e)
+        }
+    }
 
     suspend fun stop(): Result<Unit> = withContext(Dispatchers.IO) {
         if (!isRunningFlag.compareAndSet(true, false)) {
             return@withContext Result.failure(IllegalStateException("Proxy not running"))
         }
-
         return@withContext try {
             server?.close()
             server = null
@@ -164,12 +164,7 @@ object ProxyManager {
         }
     }
 
-    fun clearHistory() {
-        _requestHistory.value = emptyList()
-    }
-
-    // Separate map for response data
-    private val responseMap = ConcurrentHashMap<String, CapturedResponse>()
+    fun clearHistory() { _requestHistory.value = emptyList() }
 
     private fun nextId(): String = "req_${idCounter.incrementAndGet()}"
 
@@ -177,9 +172,6 @@ object ProxyManager {
         return object : HttpProxyInterceptInitializer() {
             override fun init(pipeline: HttpProxyInterceptPipeline) {
                 pipeline.addLast(object : HttpProxyIntercept() {
-
-                    // ---- REQUEST SIDE ----
-
                     override fun beforeRequest(
                         clientChannel: Channel?,
                         httpRequest: HttpRequest?,
@@ -187,24 +179,23 @@ object ProxyManager {
                     ) {
                         if (httpRequest != null) {
                             val id = nextId()
-                            val headers = StringBuilder()
-                            httpRequest.headers().forEach { entry ->
-                                headers.append("${entry.key}: ${entry.value}\r\n")
+                            val headers = buildString {
+                                httpRequest.headers().forEach { (k, v) -> append("$k: $v\r\n") }
                             }
-
-                            val rawReq = StringBuilder()
-                            rawReq.append("${httpRequest.method().name()} ${httpRequest.uri()} HTTP/1.1\r\n")
-                            rawReq.append(headers)
-                            rawReq.append("\r\n") // end of headers
-
+                            val rawReq = StringBuilder().apply {
+                                append("${httpRequest.method().name()} ${httpRequest.uri()} HTTP/1.1\r\n")
+                                append(headers)
+                                append("\r\n")
+                            }
                             pendingRequests[id] = CapturedRequest(
                                 id = id,
                                 method = httpRequest.method().name(),
                                 host = httpRequest.headers()[HttpHeaderNames.HOST] ?: "unknown",
                                 url = httpRequest.uri(),
-                                headers = headers.toString().trimEnd(),
+                                headers = headers.trimEnd(),
                                 body = StringBuilder(),
                                 rawRequest = rawReq,
+                                charset = extractCharset(headers),
                             )
                             Log.d(TAG, "[$id] ${httpRequest.method().name()} ${httpRequest.uri()}")
                         }
@@ -217,15 +208,12 @@ object ProxyManager {
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
                         if (httpContent != null && pipeline?.httpRequest != null) {
-                            val httpRequest = pipeline.httpRequest
-                            // Find the matching request by scanning pendingRequests
-                            val captured = findRequestForContent(httpRequest)
+                            val captured = findRequestForContent(pipeline.httpRequest)
                             if (captured != null) {
                                 val content = try {
-                                    httpContent.content().toString(StandardCharsets.UTF_8)
-                                } catch (_: Exception) {
-                                    null
-                                }
+                                    val bytes = ByteBufUtil.getBytes(httpContent.content())
+                                    decodeBytes(bytes, captured.charset)
+                                } catch (_: Exception) { null }
                                 if (content != null && content.any { it.isPrintableChar() }) {
                                     captured.body.append(content)
                                     captured.rawRequest.append(content)
@@ -235,8 +223,6 @@ object ProxyManager {
                         super.beforeRequest(clientChannel, httpContent, pipeline)
                     }
 
-                    // ---- RESPONSE SIDE ----
-
                     override fun afterResponse(
                         clientChannel: Channel?,
                         proxyChannel: Channel?,
@@ -244,25 +230,25 @@ object ProxyManager {
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
                         if (httpResponse != null && pipeline?.httpRequest != null) {
-                            val httpRequest = pipeline.httpRequest
-                            val captured = findRequestForContent(httpRequest)
+                            val captured = findRequestForContent(pipeline.httpRequest)
                             if (captured != null) {
-                                val headers = StringBuilder()
-                                httpResponse.headers().forEach { entry ->
-                                    headers.append("${entry.key}: ${entry.value}\r\n")
+                                val headers = buildString {
+                                    httpResponse.headers().forEach { (k, v) -> append("$k: $v\r\n") }
                                 }
-
-                                val rawResp = StringBuilder()
-                                rawResp.append("HTTP/1.1 ${httpResponse.status().code()} ${httpResponse.status().reasonPhrase()}\r\n")
-                                rawResp.append(headers)
-                                rawResp.append("\r\n") // end of headers
-
+                                val rawResp = StringBuilder().apply {
+                                    append("HTTP/1.1 ${httpResponse
+                                        .status().code()} ${httpResponse
+                                            .status().reasonPhrase()}\r\n")
+                                    append(headers)
+                                    append("\r\n")
+                                }
                                 responseMap[captured.id] = CapturedResponse(
                                     requestId = captured.id,
                                     statusCode = httpResponse.status().code(),
-                                    headers = headers.toString().trimEnd(),
+                                    headers = headers.trimEnd(),
                                     body = StringBuilder(),
                                     rawResponse = rawResp,
+                                    charset = extractCharset(headers),
                                 )
                             }
                         }
@@ -276,30 +262,21 @@ object ProxyManager {
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
                         if (httpContent != null && pipeline?.httpRequest != null) {
-                            val httpRequest = pipeline.httpRequest
-                            val capturedReq = findRequestForContent(httpRequest)
+                            val capturedReq = findRequestForContent(pipeline.httpRequest)
                             if (capturedReq != null) {
                                 val response = responseMap[capturedReq.id]
                                 if (response != null) {
                                     val content = try {
-                                        httpContent.content().toString(StandardCharsets.UTF_8)
-                                    } catch (_: Exception) {
-                                        null
-                                    }
+                                        val bytes = ByteBufUtil.getBytes(httpContent.content())
+                                        decodeBytes(bytes, response.charset)
+                                    } catch (_: Exception) { null }
                                     if (content != null && content.any { it.isPrintableChar() }) {
                                         response.body.append(content)
                                         response.rawResponse.append(content)
                                     }
                                 }
-
-                                // On LastHttpContent, finalize the record in a background thread
-                                // so we don't block the Netty event loop
                                 if (httpContent is LastHttpContent) {
-                                    val capturedRef = capturedReq
-                                    val responseRef = response
-                                    Thread {
-                                        finalizeRecord(capturedRef, responseRef)
-                                    }.start()
+                                    finalizeRecord(capturedReq, response)
                                 }
                             }
                         }
@@ -307,76 +284,54 @@ object ProxyManager {
                     }
                 })
             }
-
-            private fun findRequestForContent(httpRequest: HttpRequest): CapturedRequest? {
-                val targetMethod = httpRequest.method().name()
-                val targetUrl = httpRequest.uri()
-
-                // Try exact match first
-                for ((id, req) in pendingRequests) {
-                    if (req.method == targetMethod && req.url == targetUrl) {
-                        return req
-                    }
-                }
-                // Fallback: match by method + URL prefix
-                for ((id, req) in pendingRequests) {
-                    if (req.method == targetMethod && targetUrl.startsWith(req.url.split("?")[0])) {
-                        return req
-                    }
-                }
-                return null
-            }
-
-            private fun finalizeRecord(captured: CapturedRequest, response: CapturedResponse?) {
-                pendingRequests.remove(captured.id)
-
-                val record = ProxyRequestRecord(
-                    id = captured.id,
-                    method = captured.method,
-                    host = captured.host,
-                    url = captured.url,
-                    statusCode = response?.statusCode ?: 0,
-                    requestHeaders = captured.headers,
-                    requestBody = captured.body.toString(),
-                    responseHeaders = response?.headers ?: "",
-                    responseBody = response?.body?.toString() ?: "",
-                    mimeType = response?.let { guessMimeTypeFromHeaders(it.headers) } ?: "unknown",
-                    length = response?.body?.length ?: 0,
-                    rawRequest = captured.rawRequest.toString(),
-                    rawResponse = response?.rawResponse?.toString() ?: "",
-                )
-
-                // Save to in-memory list (for UI flow fallback)
-                val current = _requestHistory.value.toMutableList()
-                current.add(record)
-                _requestHistory.value = current
-
-                // Save to DB (we're already on a background thread)
-                val repo = historyRepository
-                val pid = activeProjectId
-                if (repo != null) {
-                    try {
-                        runBlocking { repo.insertRequest(pid, record) }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to save request to DB: ${e.message}")
-                    }
-                }
-
-                Log.d(TAG, "[${captured.id}] -> ${record.statusCode} (${record.length} bytes)")
-
-                if (response != null) {
-                    responseMap.remove(captured.id)
-                }
-            }
         }
     }
 
-    // Separate map for response data (declared above)
+    private fun findRequestForContent(httpRequest: HttpRequest): CapturedRequest? {
+        val targetMethod = httpRequest.method().name()
+        val targetUrl = httpRequest.uri()
+        for ((_, req) in pendingRequests) {
+            if (req.method == targetMethod && req.url == targetUrl) return req
+        }
+        for ((_, req) in pendingRequests) {
+            if (req.method == targetMethod && targetUrl
+                .startsWith(req.url.split("?")[0])) return req
+        }
+        return null
+    }
+
+    private fun finalizeRecord(captured: CapturedRequest, response: CapturedResponse?) {
+        pendingRequests.remove(captured.id)
+
+        val record = ProxyRequestRecord(
+            id = captured.id,
+            method = captured.method,
+            host = captured.host,
+            url = captured.url,
+            statusCode = response?.statusCode ?: 0,
+            requestHeaders = captured.headers,
+            requestBody = captured.body.toString(),
+            responseHeaders = response?.headers ?: "",
+            responseBody = response?.body?.toString() ?: "",
+            mimeType = response?.let { guessMimeTypeFromHeaders(it.headers) } ?: "unknown",
+            length = response?.body?.length ?: 0,
+            rawRequest = captured.rawRequest.toString(),
+            rawResponse = response?.rawResponse?.toString() ?: "",
+        )
+        val current = _requestHistory.value.toMutableList()
+        current.add(record)
+        _requestHistory.value = current
+        historyRepository?.let { repo ->
+            try { runBlocking { repo.insertRequest(activeProjectId, record) } }
+            catch (e: Exception) { Log.e(TAG, "Failed to save request to DB: ${e.message}") }
+        }
+        Log.d(TAG, "[${captured.id}] -> ${record.statusCode} (${record.length} bytes)")
+        if (response != null) responseMap.remove(captured.id)
+    }
 
     private fun guessMimeTypeFromHeaders(headers: String): String {
         val contentTypeLine = headers.lineSequence().find {
-            it.startsWith("Content-Type:", ignoreCase = true)
-        } ?: return "unknown"
+            it.startsWith("Content-Type:", ignoreCase = true) } ?: return "unknown"
         val contentType = contentTypeLine.substringAfter(":").trim()
         return when {
             contentType.contains("json", ignoreCase = true) -> "json"

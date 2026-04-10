@@ -26,7 +26,7 @@ import io.yarburart.reiproxy.ui.components.SyntaxHighlightedEditor
 import io.yarburart.reiproxy.ui.components.SyntaxHighlightedText
 
 @OptIn(ExperimentalMaterial3Api::class)
-@PreviewScreenSizes()
+@PreviewScreenSizes
 @Composable
 fun AutomateScreen(
     modifier: Modifier = Modifier,

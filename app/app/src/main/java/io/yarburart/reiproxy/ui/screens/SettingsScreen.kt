@@ -1,7 +1,6 @@
 package io.yarburart.reiproxy.ui.screens
 
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,11 +11,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
@@ -40,7 +39,6 @@ import java.util.Locale
 
 enum class AppTheme(val label: String, val mode: String) {
     SYSTEM("System", "system"),
-    LIGHT("Light", "light"),
     DARK("Dark", "dark"),
     WHITE("White", "white"),
 }
@@ -88,6 +86,7 @@ data class CertInfo(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @PreviewScreenSizes
+@Suppress("UNUSED_VARIABLE")
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -142,7 +141,6 @@ fun SettingsScreen(
             Button(
                 onClick = onStartStopProxy,
                 modifier = Modifier
-                    .fillMaxWidth()
                     .padding(vertical = 8.dp),
                 enabled = state.proxyHost.isNotBlank() && state.proxyPort.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
@@ -201,7 +199,7 @@ fun SettingsScreen(
                     label = { Text("Theme") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded) },
                     modifier = Modifier
-                        .menuAnchor()
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
                         .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
@@ -245,7 +243,6 @@ fun SettingsScreen(
                     }
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
                             .padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -264,8 +261,7 @@ fun SettingsScreen(
                     }
                 } else {
                     Button(
-                        onClick = { onGenerateCert() },
-                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onGenerateCert() }
                     ) {
                         Text("Generate Custom CA Cert")
                     }

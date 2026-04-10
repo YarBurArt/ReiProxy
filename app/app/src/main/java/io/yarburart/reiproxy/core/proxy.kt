@@ -17,11 +17,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import io.yarburart.reiproxy.data.HistoryRepository
 
 private fun Char.isPrintableChar(): Boolean =
     isISOControl().not() && this != Char.MIN_VALUE
@@ -65,6 +67,18 @@ object ProxyManager {
 
     private val _activeConfig = MutableStateFlow(ProxyConfig())
     val activeConfig: StateFlow<ProxyConfig> = _activeConfig.asStateFlow()
+
+    @Volatile
+    private var historyRepository: HistoryRepository? = null
+    private var activeProjectId: Long = 0
+
+    fun setHistoryRepository(repo: HistoryRepository) {
+        historyRepository = repo
+    }
+
+    fun setActiveProjectId(projectId: Long) {
+        activeProjectId = projectId
+    }
 
     @Volatile
     private var server: HttpProxyServer? = null
@@ -278,9 +292,14 @@ object ProxyManager {
                                     }
                                 }
 
-                                // On LastHttpContent, finalize the record
+                                // On LastHttpContent, finalize the record in a background thread
+                                // so we don't block the Netty event loop
                                 if (httpContent is LastHttpContent) {
-                                    finalizeRecord(capturedReq, response)
+                                    val capturedRef = capturedReq
+                                    val responseRef = response
+                                    Thread {
+                                        finalizeRecord(capturedRef, responseRef)
+                                    }.start()
                                 }
                             }
                         }
@@ -327,9 +346,22 @@ object ProxyManager {
                     rawResponse = response?.rawResponse?.toString() ?: "",
                 )
 
+                // Save to in-memory list (for UI flow fallback)
                 val current = _requestHistory.value.toMutableList()
                 current.add(record)
                 _requestHistory.value = current
+
+                // Save to DB (we're already on a background thread)
+                val repo = historyRepository
+                val pid = activeProjectId
+                if (repo != null) {
+                    try {
+                        runBlocking { repo.insertRequest(pid, record) }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to save request to DB: ${e.message}")
+                    }
+                }
+
                 Log.d(TAG, "[${captured.id}] -> ${record.statusCode} (${record.length} bytes)")
 
                 if (response != null) {

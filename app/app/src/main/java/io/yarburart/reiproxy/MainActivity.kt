@@ -32,6 +32,11 @@ import com.github.monkeywie.proxyee.crt.CertUtil
 import io.yarburart.reiproxy.core.ProxyConfig
 import io.yarburart.reiproxy.core.ProxyManager
 import io.yarburart.reiproxy.core.ProxyRequestRecord
+import io.yarburart.reiproxy.data.HistoryRepository
+import io.yarburart.reiproxy.data.Project
+import io.yarburart.reiproxy.data.ProjectRepository
+import io.yarburart.reiproxy.data.SettingsManager
+import io.yarburart.reiproxy.db.ReiProxyDatabase
 import io.yarburart.reiproxy.ui.screens.AppTheme
 import io.yarburart.reiproxy.ui.screens.AutomateScreen
 import io.yarburart.reiproxy.ui.screens.CertInfo
@@ -51,14 +56,31 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val database = ReiProxyDatabase.getDatabase(this)
+        val projectRepository = ProjectRepository(database.projectDao())
+        val historyRepository = HistoryRepository(database.requestHistoryDao())
+        val settingsManager = SettingsManager(this)
+
+        ProxyManager.setHistoryRepository(historyRepository)
+
         setContent {
-            // Theme state lives here at the top level so it can drive ReiProxyTheme
             var appTheme by remember { mutableStateOf(AppTheme.SYSTEM) }
+            var activeProjectId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+            // Sync active project to ProxyManager for DB saves
+            activeProjectId?.let { ProxyManager.setActiveProjectId(it) }
 
             ReiProxyTheme(themeMode = appTheme.mode) {
                 ReiProxyApp(
                     theme = appTheme,
                     onThemeChange = { appTheme = it },
+                    projectRepository = projectRepository,
+                    historyRepository = historyRepository,
+                    settingsManager = settingsManager,
+                    activeProjectId = activeProjectId,
+                    onProjectSelected = { activeProjectId = it },
+                    onThemeFromSettings = { appTheme = it },
                 )
             }
         }
@@ -70,20 +92,55 @@ class MainActivity : ComponentActivity() {
 fun ReiProxyApp(
     theme: AppTheme = AppTheme.SYSTEM,
     onThemeChange: (AppTheme) -> Unit = {},
+    projectRepository: ProjectRepository? = null,
+    historyRepository: HistoryRepository? = null,
+    settingsManager: SettingsManager? = null,
+    activeProjectId: Long? = null,
+    onProjectSelected: (Long?) -> Unit = {},
+    onThemeFromSettings: (AppTheme) -> Unit = {},
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
 
     val proxyConfig by ProxyManager.activeConfig.collectAsState()
     val isRunning by ProxyManager.isRunning.collectAsState()
-    val requestHistory by ProxyManager.requestHistory.collectAsState()
+
+    // DB-backed history flow
+    val requestHistory: List<ProxyRequestRecord> = if (activeProjectId != null && historyRepository != null) {
+        historyRepository.getHistoryByProject(activeProjectId).collectAsState(emptyList()).value
+    } else {
+        ProxyManager.requestHistory.collectAsState().value
+    }
+
+    // Projects flow
+    val projects: List<Project> = if (projectRepository != null) {
+        projectRepository.getAllProjects().collectAsState(emptyList()).value
+    } else {
+        emptyList()
+    }
+
+    // Per-project settings flow
+    val projectSettings: io.yarburart.reiproxy.data.ProjectSettings? = if (activeProjectId != null && settingsManager != null) {
+        settingsManager.getSettingsFlow(activeProjectId).collectAsState(null).value
+    } else {
+        null
+    }
+
     val scope = rememberCoroutineScope()
 
-    // Settings state
-    var settingsHost by remember { mutableStateOf(proxyConfig.host) }
-    var settingsPort by remember { mutableStateOf(proxyConfig.port.toString()) }
-    var interceptEnabled by remember { mutableStateOf(false) }
-    var handleSsl by remember { mutableStateOf(true) }
+    // Settings state (from DB or defaults)
+    var settingsHost by remember { mutableStateOf(projectSettings?.host ?: proxyConfig.host) }
+    var settingsPort by remember { mutableStateOf(projectSettings?.port?.toString() ?: proxyConfig.port.toString()) }
+    var interceptEnabled by remember { mutableStateOf(projectSettings?.interceptEnabled ?: false) }
+    var handleSsl by remember { mutableStateOf(projectSettings?.handleSsl ?: true) }
     var currentCert by remember { mutableStateOf<CertInfo?>(null) }
+
+    // Sync settings when projectSettings changes
+    if (projectSettings != null) {
+        settingsHost = projectSettings!!.host
+        settingsPort = projectSettings!!.port.toString()
+        interceptEnabled = projectSettings!!.interceptEnabled
+        handleSsl = projectSettings!!.handleSsl
+    }
 
     // Shared selected request for Repeat/Automate
     var selectedRequest by remember { mutableStateOf<ProxyRequestRecord?>(null) }
@@ -99,6 +156,7 @@ fun ReiProxyApp(
     )
 
     fun handleStartStopProxy() {
+        if (activeProjectId == null) return
         scope.launch {
             if (isRunning) {
                 ProxyManager.stop()
@@ -111,6 +169,11 @@ fun ReiProxyApp(
                     interceptEnabled = interceptEnabled,
                 )
                 ProxyManager.updateConfig(config)
+                // Save settings for this project
+                settingsManager?.updateHost(activeProjectId, settingsHost)
+                settingsManager?.updatePort(activeProjectId, port)
+                settingsManager?.updateInterceptEnabled(activeProjectId, interceptEnabled)
+                settingsManager?.updateHandleSsl(activeProjectId, handleSsl)
                 ProxyManager.start(config)
             }
         }
@@ -143,11 +206,36 @@ fun ReiProxyApp(
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             val modifier = Modifier.padding(innerPadding)
             when (currentDestination) {
-                AppDestinations.HOME -> HomeScreen(modifier = modifier)
+                AppDestinations.HOME -> HomeScreen(
+                    modifier = modifier,
+                    projects = projects,
+                    activeProjectId = activeProjectId,
+                    historyCount = requestHistory.size,
+                    proxyRunning = isRunning,
+                    onProjectSelected = onProjectSelected,
+                    onProjectCreated = { name, desc ->
+                        projectRepository?.let { repo ->
+                            scope.launch { repo.insertProject(name, desc) }
+                        }
+                    },
+                    onProjectDeleted = { project ->
+                        projectRepository?.let { repo ->
+                            scope.launch { repo.deleteProject(project) }
+                        }
+                    },
+                    onStartProxy = { handleStartStopProxy() },
+                    onStopProxy = { handleStartStopProxy() },
+                )
                 AppDestinations.HISTORY -> HistoryScreen(
                     modifier = modifier,
                     requests = requestHistory,
-                    onClear = { ProxyManager.clearHistory() },
+                    onClear = {
+                        if (activeProjectId != null) {
+                            scope.launch { historyRepository?.clearHistoryByProject(activeProjectId) }
+                        } else {
+                            ProxyManager.clearHistory()
+                        }
+                    },
                     onRequestSelected = { selectedRequest = it },
                 )
                 AppDestinations.AUTOMATE -> AutomateScreen(
@@ -166,7 +254,14 @@ fun ReiProxyApp(
                     onPortChange = { settingsPort = it },
                     onInterceptToggle = { interceptEnabled = it },
                     onStartStopProxy = { handleStartStopProxy() },
-                    onThemeChange = onThemeChange,
+                    onThemeChange = { newTheme ->
+                        onThemeChange(newTheme)
+                        if (activeProjectId != null) {
+                            scope.launch {
+                                settingsManager?.updateThemeMode(activeProjectId, newTheme.mode)
+                            }
+                        }
+                    },
                     onGenerateCert = { handleGenerateCert() },
                     onExportCert = { cert, ctx -> exportCert(cert, ctx) },
                 )

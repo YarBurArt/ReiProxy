@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,7 +25,7 @@ import io.yarburart.reiproxy.ui.components.AdaptiveSplitPane
 import io.yarburart.reiproxy.ui.components.SyntaxHighlightedEditor
 import io.yarburart.reiproxy.ui.components.SyntaxHighlightedText
 
-@PreviewScreenSizes()
+@PreviewScreenSizes
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RepeatScreen(
@@ -57,7 +58,9 @@ fun RepeatScreen(
         AdaptiveSplitPane(
             firstPane = {
                 Column(modifier = Modifier.fillMaxSize().weight(1f).padding(8.dp)) {
-                    Text("Request — $fullUrl", modifier = Modifier.padding(bottom = 4.dp))
+                    Text("Request", modifier = Modifier.padding(bottom = 4.dp))
+                    HorizontalDivider(modifier = Modifier, thickness = 1.dp)
+                    Text("URL: $fullUrl", modifier = Modifier.padding(vertical = 4.dp))
                     // Single editable highlighted editor
                     SyntaxHighlightedEditor(
                         value = rawRequestText,

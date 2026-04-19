@@ -24,3 +24,20 @@
 -keepclassmembers class kotlin.Metadata { public <methods>; }
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# Test dependencies
+-dontwarn com.google.errorprone.**
+-dontwarn org.hamcrest.**
+-dontwarn junit.**
+-dontwarn org.junit.**
+-dontwarn org.robolectric.**
+-dontwarn androidx.test.**
+-keep class kotlin.reflect.** { *; }
+-dontwarn kotlin.reflect.**
+
+# Kotlin delegation
+-dontwarn kotlinx.**
+-keep class kotlin.LazyThreadSafetyMode { *; }
+-keep class kotlin.properties.** { *; }
+
+

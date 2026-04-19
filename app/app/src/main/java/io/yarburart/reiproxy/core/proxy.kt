@@ -10,6 +10,7 @@ import io.netty.buffer.ByteBufUtil
 import io.netty.channel.Channel
 import io.netty.handler.codec.http.HttpContent
 import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaders
 import io.netty.handler.codec.http.HttpRequest
 import io.netty.handler.codec.http.HttpResponse
 import io.netty.handler.codec.http.LastHttpContent
@@ -122,7 +123,7 @@ object ProxyManager {
         }
         _activeConfig.value = config
         server = HttpProxyServer()
-        val serverConfig = HttpProxyServerConfig().apply { setHandleSsl(config.handleSsl) }
+        val serverConfig = HttpProxyServerConfig().apply { isHandleSsl = config.handleSsl }
         try {
             server!!
                 .serverConfig(serverConfig)
@@ -177,28 +178,7 @@ object ProxyManager {
                         httpRequest: HttpRequest?,
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
-                        if (httpRequest != null) {
-                            val id = nextId()
-                            val headers = buildString {
-                                httpRequest.headers().forEach { (k, v) -> append("$k: $v\r\n") }
-                            }
-                            val rawReq = StringBuilder().apply {
-                                append("${httpRequest.method().name()} ${httpRequest.uri()} HTTP/1.1\r\n")
-                                append(headers)
-                                append("\r\n")
-                            }
-                            pendingRequests[id] = CapturedRequest(
-                                id = id,
-                                method = httpRequest.method().name(),
-                                host = httpRequest.headers()[HttpHeaderNames.HOST] ?: "unknown",
-                                url = httpRequest.uri(),
-                                headers = headers.trimEnd(),
-                                body = StringBuilder(),
-                                rawRequest = rawReq,
-                                charset = extractCharset(headers),
-                            )
-                            Log.d(TAG, "[$id] ${httpRequest.method().name()} ${httpRequest.uri()}")
-                        }
+                        if (httpRequest != null) handleNewRequest(httpRequest)
                         super.beforeRequest(clientChannel, httpRequest, pipeline)
                     }
 
@@ -207,18 +187,13 @@ object ProxyManager {
                         httpContent: HttpContent?,
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
-                        if (httpContent != null && pipeline?.httpRequest != null) {
-                            val captured = findRequestForContent(pipeline.httpRequest)
-                            if (captured != null) {
-                                val content = try {
-                                    val bytes = ByteBufUtil.getBytes(httpContent.content())
-                                    decodeBytes(bytes, captured.charset)
-                                } catch (_: Exception) { null }
-                                if (content != null && content.any { it.isPrintableChar() }) {
-                                    captured.body.append(content)
-                                    captured.rawRequest.append(content)
-                                }
-                            }
+                        val req = pipeline?.httpRequest
+                        if (req != null && httpContent != null) {
+                            val captured = findRequestForContent(req)
+                            captured?.let { appendDecodedContent(
+                                httpContent, it.body,
+                                it.rawRequest, it.charset
+                            ) }
                         }
                         super.beforeRequest(clientChannel, httpContent, pipeline)
                     }
@@ -229,28 +204,10 @@ object ProxyManager {
                         httpResponse: HttpResponse?,
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
-                        if (httpResponse != null && pipeline?.httpRequest != null) {
-                            val captured = findRequestForContent(pipeline.httpRequest)
-                            if (captured != null) {
-                                val headers = buildString {
-                                    httpResponse.headers().forEach { (k, v) -> append("$k: $v\r\n") }
-                                }
-                                val rawResp = StringBuilder().apply {
-                                    append("HTTP/1.1 ${httpResponse
-                                        .status().code()} ${httpResponse
-                                            .status().reasonPhrase()}\r\n")
-                                    append(headers)
-                                    append("\r\n")
-                                }
-                                responseMap[captured.id] = CapturedResponse(
-                                    requestId = captured.id,
-                                    statusCode = httpResponse.status().code(),
-                                    headers = headers.trimEnd(),
-                                    body = StringBuilder(),
-                                    rawResponse = rawResp,
-                                    charset = extractCharset(headers),
-                                )
-                            }
+                        val req = pipeline?.httpRequest
+                        if (req != null && httpResponse != null) {
+                            val capturedReq = findRequestForContent(req)
+                            capturedReq?.let { handleNewResponse(httpResponse, it.id) }
                         }
                         super.afterResponse(clientChannel, proxyChannel, httpResponse, pipeline)
                     }
@@ -261,19 +218,16 @@ object ProxyManager {
                         httpContent: HttpContent?,
                         pipeline: HttpProxyInterceptPipeline?,
                     ) {
-                        if (httpContent != null && pipeline?.httpRequest != null) {
-                            val capturedReq = findRequestForContent(pipeline.httpRequest)
+                        val req = pipeline?.httpRequest
+                        if (req != null && httpContent != null) {
+                            val capturedReq = findRequestForContent(req)
                             if (capturedReq != null) {
                                 val response = responseMap[capturedReq.id]
                                 if (response != null) {
-                                    val content = try {
-                                        val bytes = ByteBufUtil.getBytes(httpContent.content())
-                                        decodeBytes(bytes, response.charset)
-                                    } catch (_: Exception) { null }
-                                    if (content != null && content.any { it.isPrintableChar() }) {
-                                        response.body.append(content)
-                                        response.rawResponse.append(content)
-                                    }
+                                    appendDecodedContent(
+                                        httpContent, response.body,
+                                        response.rawResponse, response.charset
+                                    )
                                 }
                                 if (httpContent is LastHttpContent) {
                                     finalizeRecord(capturedReq, response)
@@ -285,6 +239,68 @@ object ProxyManager {
                 })
             }
         }
+    }
+
+    private fun handleNewRequest(httpRequest: HttpRequest) {
+        val id = nextId()
+        val headersStr = buildHeadersString(httpRequest.headers())
+
+        pendingRequests[id] = CapturedRequest(
+            id = id,
+            method = httpRequest.method().name(),
+            host = httpRequest.headers()[HttpHeaderNames.HOST] ?: "unknown",
+            url = httpRequest.uri(),
+            headers = headersStr.trimEnd(),
+            body = StringBuilder(),
+            rawRequest = buildRawRequest(httpRequest, headersStr),
+            charset = extractCharset(headersStr),
+        )
+        Log.d(TAG, "[$id] ${httpRequest.method().name()} ${httpRequest.uri()}")
+    }
+
+    private fun handleNewResponse(httpResponse: HttpResponse, requestId: String) {
+        val headersStr = buildHeadersString(httpResponse.headers())
+
+        responseMap[requestId] = CapturedResponse(
+            requestId = requestId,
+            statusCode = httpResponse.status().code(),
+            headers = headersStr.trimEnd(),
+            body = StringBuilder(),
+            rawResponse = buildRawResponse(httpResponse, headersStr),
+            charset = extractCharset(headersStr),
+        )
+    }
+
+    private fun buildHeadersString(headers: HttpHeaders) = buildString {
+        headers.forEach { (k, v) -> append("$k: $v\r\n") }
+    }
+
+    private fun buildRawRequest(req: HttpRequest, headers: String) = StringBuilder().apply {
+        append("${req.method().name()} ${req.uri()} HTTP/1.1\r\n")
+        append(headers)
+        append("\r\n")
+    }
+
+    private fun buildRawResponse(resp: HttpResponse, headers: String) = StringBuilder().apply {
+        append("HTTP/1.1 ${resp.status().code()} ${resp.status().reasonPhrase()}\r\n")
+        append(headers)
+        append("\r\n")
+    }
+
+    private fun appendDecodedContent(
+        content: HttpContent,
+        targetBody: StringBuilder,
+        targetRaw: StringBuilder,
+        charset: Charset
+    ) {
+        try {
+            val bytes = ByteBufUtil.getBytes(content.content())
+            val decoded = decodeBytes(bytes, charset)
+            if (decoded.any { it.isPrintableChar() }) {
+                targetBody.append(decoded)
+                targetRaw.append(decoded)
+            }
+        } catch (_: Exception) { }
     }
 
     private fun findRequestForContent(httpRequest: HttpRequest): CapturedRequest? {

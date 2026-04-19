@@ -19,6 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.properties.Delegates
 
 @ExperimentalCoroutinesApi
 @RunWith(RobolectricTestRunner::class)
@@ -29,8 +30,8 @@ class RequestHistoryDaoTest {
     private lateinit var historyDao: io.yarburart.reiproxy.db.RequestHistoryDao
     private lateinit var projectDao: io.yarburart.reiproxy.db.ProjectDao
 
-    private lateinit var project1Id: Long
-    private lateinit var project2Id: Long
+    private var project1Id by Delegates.notNull<Long>()
+    private var project2Id by Delegates.notNull<Long>()
 
     @Before
     fun createDb() = runTest {

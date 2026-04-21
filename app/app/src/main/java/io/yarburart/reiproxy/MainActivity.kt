@@ -1,6 +1,7 @@
 package io.yarburart.reiproxy
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -46,6 +47,8 @@ import io.yarburart.reiproxy.ui.theme.ReiProxyTheme
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 class MainActivity : ComponentActivity() {
 
@@ -53,17 +56,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Initialize repositories and settings
         val database = ReiProxyDatabase.getDatabase(this)
         val projectRepository = ProjectRepository(database.projectDao())
         val historyRepository = HistoryRepository(database.requestHistoryDao())
         val settingsManager = SettingsManager(this)
 
+        // Configure proxy manager with history tracking
         ProxyManager.setHistoryRepository(historyRepository)
 
         setContent {
             var appTheme by remember { mutableStateOf(AppTheme.SYSTEM) }
             var activeProjectId by rememberSaveable { mutableStateOf<Long?>(null) }
 
+            // Set active project for proxy history operations
             activeProjectId?.let { ProxyManager.setActiveProjectId(it) }
 
             ReiProxyTheme(themeMode = appTheme.mode) {
@@ -100,6 +106,8 @@ fun ReiProxyApp(
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
     var selectedRequest by remember { mutableStateOf<ProxyRequestRecord?>(null) }
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var payloads by remember { mutableStateOf(loadPayloads(appContext)) }
 
     val screen = rememberScreenState(
         activeProjectId, projectRepository, historyRepository, settingsManager)
@@ -126,8 +134,10 @@ fun ReiProxyApp(
         handleSsl = settings.handleSsl,
         theme = theme,
         certInfo = currentCert,
+        payloadCount = payloads.size,
     )
 
+    // Navigation hub that routes to different app screens based on destination
     NavigationSuite(currentDestination, { currentDestination = it }) { padding ->
         when (currentDestination) {
             AppDestinations.HOME -> HomeContent(
@@ -138,13 +148,18 @@ fun ReiProxyApp(
                 onRequestSelected = { selectedRequest = it },
                 onNavigateToRepeat = { currentDestination = AppDestinations.REPEAT },
             )
-            AppDestinations.AUTOMATE -> AutomateScreen(
-                modifier = padding, selectedRequest = selectedRequest)
+            AppDestinations.AUTOMATE -> AutomateContent(
+                padding, selectedRequest, historyRepository, activeProjectId, screen, payloads)
             AppDestinations.REPEAT -> RepeatContent(
                 padding, selectedRequest, historyRepository, activeProjectId, screen)
             AppDestinations.DECODE -> DecodeScreen(modifier = padding)
             AppDestinations.SETTINGS -> SettingsContent(
-                padding, settingsState, settings, actions) { currentCert = it }
+                padding, settingsState, settings, actions,
+                onPayloadsImported = { imported ->
+                    payloads = imported
+                    Toast.makeText(appContext, "Imported ${imported.size} payload categories", Toast.LENGTH_SHORT).show()
+                },
+            ) { currentCert = it }
         }
     }
 }
@@ -222,6 +237,7 @@ private fun rememberSettingsState(
     return state.value
 }
 
+// Core proxy operations: start/stop server, generate SSL cert, change theme
 data class ProxyActions(
     val startStopProxy: () -> Unit,
     val generateCert: () -> CertInfo,
@@ -376,13 +392,35 @@ private fun RepeatContent(
 }
 
 @Composable
+private fun AutomateContent(
+    modifier: Modifier,
+    selectedRequest: ProxyRequestRecord?,
+    historyRepository: HistoryRepository?,
+    activeProjectId: Long?,
+    screen: AppScreen,
+    payloads: List<PayloadRecord>,
+) {
+    AutomateScreen(
+        modifier = modifier,
+        selectedRequest = selectedRequest,
+        historyRepository = historyRepository,
+        activeProjectId = activeProjectId,
+        requests = screen.requestHistory,
+        payloads = payloads,
+    )
+}
+
+@Composable
 private fun SettingsContent(
     modifier: Modifier,
     state: SettingsState,
     settings: SettingsStateHolder,
     actions: ProxyActions,
+    onPayloadsImported: (List<PayloadRecord>) -> Unit,
     onCertGenerated: (CertInfo) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     SettingsScreen(
         modifier = modifier,
         state = state,
@@ -396,7 +434,17 @@ private fun SettingsContent(
             onCertGenerated(cert)
             cert
         },
-        onExportCert = { cert, ctx -> exportCert(ctx) },
+        onExportCert = { _, ctx -> exportCert(ctx) },
+        onSyncPayloads = {
+            scope.launch {
+                val results = fetchPayloadsFromGithub(context) { progress ->
+                    scope.launch(Dispatchers.Main) {
+                        Toast.makeText(context, progress, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                onPayloadsImported(results)
+            }
+        }
     )
 }
 

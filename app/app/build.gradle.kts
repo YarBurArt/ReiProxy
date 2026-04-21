@@ -24,9 +24,9 @@ android {
 
     buildTypes {
         debug {
-            isDebuggable = false
-            isMinifyEnabled = true
-            isShrinkResources = true
+//            isDebuggable = false
+//            isMinifyEnabled = true
+//            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -76,6 +76,7 @@ dependencies {
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.documentfile)
     ksp(libs.androidx.room.compiler)
 
     // DataStore

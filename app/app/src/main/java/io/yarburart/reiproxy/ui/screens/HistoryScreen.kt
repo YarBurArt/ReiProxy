@@ -13,6 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,12 +27,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +52,8 @@ fun HistoryScreen(
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var viewTab by remember { mutableIntStateOf(0) }
 
-    if (selectedIndex != null && selectedIndex!! >= requests.size) {
+    val currentSelectedIndex = selectedIndex
+    if (currentSelectedIndex != null && currentSelectedIndex >= requests.size) {
         selectedIndex = null
     }
 
@@ -98,8 +99,9 @@ fun HistoryScreen(
                 },
                 secondPane = {
                     Column(modifier = Modifier.fillMaxSize().weight(1f)) {
-                        if (selectedIndex != null && requests.isNotEmpty()) {
-                            val selected = requests[selectedIndex!!]
+                        val currentSelectedIdx = selectedIndex
+                        if (currentSelectedIdx != null && requests.isNotEmpty()) {
+                            val selected = requests[currentSelectedIdx]
 
                             Row(
                                 modifier = Modifier

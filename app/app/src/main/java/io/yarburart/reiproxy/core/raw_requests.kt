@@ -142,7 +142,8 @@ private fun readResponse(connection: HttpURLConnection, headersHint: String): Ra
                     ?.let { n -> try {
                         Charset.forName(n)
                     } catch (_: Exception) { null } }
-                decodeBytes(bytes, hint)
+                val contentEncoding = connection.contentEncoding
+                decodeBytes(bytes, hint, contentEncoding)
             } else ""
         } ?: ""
     } catch (e: Exception) {

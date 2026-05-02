@@ -147,6 +147,7 @@ fun ReiProxyApp(
                 padding, screen, activeProjectId, historyRepository, scope,
                 onRequestSelected = { selectedRequest = it },
                 onNavigateToRepeat = { currentDestination = AppDestinations.REPEAT },
+                onNavigateToAutomate = { currentDestination = AppDestinations.AUTOMATE },
             )
             AppDestinations.AUTOMATE -> AutomateContent(
                 padding, selectedRequest, historyRepository, activeProjectId, screen, payloads)
@@ -358,6 +359,7 @@ private fun HistoryContent(
     scope: CoroutineScope,
     onRequestSelected: (ProxyRequestRecord?) -> Unit,
     onNavigateToRepeat: () -> Unit,
+    onNavigateToAutomate: () -> Unit,
 ) {
     HistoryScreen(
         modifier = modifier,
@@ -369,8 +371,16 @@ private fun HistoryContent(
                 ProxyManager.clearHistory()
             }
         },
+        onDeleteRequest = { record ->
+            if (activeProjectId != null) {
+                scope.launch { historyRepository?.deleteRequest(record.id) }
+            } else {
+                ProxyManager.deleteRequest(record.id)
+            }
+        },
         onRequestSelected = onRequestSelected,
         onNavigateToRepeat = onNavigateToRepeat,
+        onNavigateToAutomate = onNavigateToAutomate,
     )
 }
 

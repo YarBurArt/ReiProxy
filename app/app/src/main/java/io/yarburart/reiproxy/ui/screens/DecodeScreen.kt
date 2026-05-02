@@ -60,6 +60,11 @@ fun DecodeScreen(modifier: Modifier = Modifier) {
                     settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                     settings.loadsImagesAutomatically = true
                     settings.setSupportMultipleWindows(true)
+                    
+                    // Force Desktop Mode
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         settings.mixedContentMode =

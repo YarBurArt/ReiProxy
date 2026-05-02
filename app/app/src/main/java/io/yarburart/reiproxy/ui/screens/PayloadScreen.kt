@@ -48,6 +48,29 @@ fun PayloadScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text("Payloads Library", style = MaterialTheme.typography.titleMedium)
+
+            if (fuzzmeCount > 0) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Select Target Slots:", style = MaterialTheme.typography.labelLarge)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        repeat(fuzzmeCount) { index ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = selectedFuzzIndexes.contains(index),
+                                    onCheckedChange = { onToggleFuzzIndex(index) },
+                                )
+                                Text("#${index + 1}", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
+
             if (payloads.isEmpty()) {
                 EmptyState("No payloads loaded. Please sync from settings.")
                 return@Column
@@ -80,7 +103,7 @@ fun PayloadScreen(
                     }
 
                     if (isSelected) {
-                        // 1. Show README explanation if exists
+                        // Show README explanation if exists
                         payload.readmePath?.let { path ->
                             val content = getFileContent(path)
                             if (content.isNotBlank()) {
@@ -99,7 +122,7 @@ fun PayloadScreen(
                             }
                         }
 
-                        // 2. Show Intruder sets if exists
+                        // Show Intruder sets if exists
                         if (payload.intruders.isEmpty()) {
                             Text(
                                 text = "No direct intruder files, check README for manual payloads.",
@@ -116,10 +139,7 @@ fun PayloadScreen(
                             payload.intruders.forEach { intruder ->
                                 IntruderRow(
                                     intruder = intruder,
-                                    fuzzmeCount = fuzzmeCount,
                                     selectedIntruderPath = selectedIntruderPath,
-                                    selectedFuzzIndexes = selectedFuzzIndexes,
-                                    onToggleFuzzIndex = onToggleFuzzIndex,
                                     onUse = { onUseIntruder(payload, intruder, selectedFuzzIndexes) },
                                 )
                             }
@@ -135,10 +155,7 @@ fun PayloadScreen(
 @Composable
 private fun IntruderRow(
     intruder: IntruderPayload,
-    fuzzmeCount: Int,
     selectedIntruderPath: String?,
-    selectedFuzzIndexes: Set<Int>,
-    onToggleFuzzIndex: (Int) -> Unit,
     onUse: () -> Unit,
 ) {
     Column(
@@ -157,25 +174,6 @@ private fun IntruderRow(
             }
             TextButton(onClick = onUse) {
                 Text(if (selectedIntruderPath == intruder.path) "Use again" else "Use")
-            }
-        }
-        
-        if (fuzzmeCount > 0) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text("Target slot:", fontSize = 11.sp)
-                repeat(fuzzmeCount) { index ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = selectedFuzzIndexes.contains(index),
-                            onCheckedChange = { onToggleFuzzIndex(index) },
-                        )
-                        Text("#${index + 1}", fontSize = 11.sp)
-                    }
-                }
             }
         }
     }

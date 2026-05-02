@@ -60,8 +60,8 @@ fun RepeatScreen(
 
     fun loadRequest(req: ProxyRequestRecord) {
         currentRecord = req
-        rawRequestText = TextFieldValue(req.rawRequest.takeIf { it.isNotBlank() } ?: buildRawRequest(req))
-        rawResponseText = req.rawResponse.takeIf { it.isNotBlank() } ?: buildRawResponse(req)
+        rawRequestText = TextFieldValue(req.buildRawRequestText())
+        rawResponseText = req.buildRawResponseText()
         historyIndex = repeaterHistory.indexOfFirst { it.id == req.id }.coerceAtLeast(-1)
     }
 
@@ -160,29 +160,5 @@ fun RepeatScreen(
                 }
             },
         )
-    }
-}
-
-fun buildRawRequest(req: ProxyRequestRecord?): String {
-    if (req == null) return ""
-    return buildString {
-        append("${req.method} ${req.url} HTTP/1.1\r\n")
-        if (req.requestHeaders.isNotBlank()) {
-            append(req.requestHeaders.replace("\n", "\r\n"))
-            append("\r\n")
-        }
-        if (req.requestBody.isNotBlank()) { append("\r\n"); append(req.requestBody) }
-    }
-}
-
-fun buildRawResponse(req: ProxyRequestRecord?): String {
-    if (req == null) return ""
-    return buildString {
-        append("HTTP/1.1 ${req.statusCode}\r\n")
-        if (req.responseHeaders.isNotBlank()) {
-            append(req.responseHeaders.replace("\n", "\r\n"))
-            append("\r\n")
-        }
-        if (req.responseBody.isNotBlank()) { append("\r\n"); append(req.responseBody) }
     }
 }

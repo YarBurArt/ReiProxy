@@ -9,7 +9,9 @@ import com.github.monkeywie.proxyee.server.HttpProxyServerConfig
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.Channel
 import io.netty.handler.codec.http.HttpContent
+import io.netty.handler.codec.http.HttpContentDecompressor
 import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
 import io.netty.handler.codec.http.HttpHeaders
 import io.netty.handler.codec.http.HttpRequest
 import io.netty.handler.codec.http.HttpResponse
@@ -62,7 +64,37 @@ data class ProxyRequestRecord(
     val timestamp: Long = System.currentTimeMillis(),
     val rawRequest: String = "",
     val rawResponse: String = "",
-)
+) {
+    fun buildRawRequestText(): String {
+        if (rawRequest.isNotBlank()) return rawRequest
+        return buildString {
+            append("$method $url HTTP/1.1\n")
+            if (requestHeaders.isNotBlank()) {
+                append(requestHeaders)
+                append("\n")
+            }
+            if (requestBody.isNotBlank()) {
+                append("\n")
+                append(requestBody)
+            }
+        }
+    }
+
+    fun buildRawResponseText(): String {
+        if (rawResponse.isNotBlank()) return rawResponse
+        return buildString {
+            append("HTTP/1.1 $statusCode\n")
+            if (responseHeaders.isNotBlank()) {
+                append(responseHeaders)
+                append("\n")
+            }
+            if (responseBody.isNotBlank()) {
+                append("\n")
+                append(responseBody)
+            }
+        }
+    }
+}
 
 object ProxyManager {
 
@@ -167,6 +199,10 @@ object ProxyManager {
 
     fun clearHistory() { _requestHistory.value = emptyList() }
 
+    fun deleteRequest(id: String) {
+        _requestHistory.value = _requestHistory.value.filter { it.id != id }
+    }
+
     private fun nextId(): String = "req_${idCounter.incrementAndGet()}"
 
     private fun buildInterceptInitializer(): HttpProxyInterceptInitializer {
@@ -190,10 +226,13 @@ object ProxyManager {
                         val req = pipeline?.httpRequest
                         if (req != null && httpContent != null) {
                             val captured = findRequestForContent(req)
-                            captured?.let { appendDecodedContent(
-                                httpContent, it.body,
-                                it.rawRequest, it.charset
-                            ) }
+                            captured?.let {
+                                val contentEncoding = req.headers().get(HttpHeaderNames.CONTENT_ENCODING)
+                                appendDecodedContent(
+                                    httpContent, it.body,
+                                    it.rawRequest, it.charset, contentEncoding
+                                )
+                            }
                         }
                         super.beforeRequest(clientChannel, httpContent, pipeline)
                     }
@@ -224,9 +263,10 @@ object ProxyManager {
                             if (capturedReq != null) {
                                 val response = responseMap[capturedReq.id]
                                 if (response != null) {
+                                    val contentEncoding = pipeline?.httpResponse?.headers()?.get(HttpHeaderNames.CONTENT_ENCODING)
                                     appendDecodedContent(
                                         httpContent, response.body,
-                                        response.rawResponse, response.charset
+                                        response.rawResponse, response.charset, contentEncoding
                                     )
                                 }
                                 if (httpContent is LastHttpContent) {
@@ -291,11 +331,12 @@ object ProxyManager {
         content: HttpContent,
         targetBody: StringBuilder,
         targetRaw: StringBuilder,
-        charset: Charset
+        charset: Charset,
+        contentEncoding: String? = null
     ) {
         try {
             val bytes = ByteBufUtil.getBytes(content.content())
-            val decoded = decodeBytes(bytes, charset)
+            val decoded = decodeBytes(bytes, charset, contentEncoding)
             if (decoded.any { it.isPrintableChar() }) {
                 targetBody.append(decoded)
                 targetRaw.append(decoded)
